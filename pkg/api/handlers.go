@@ -62,7 +62,8 @@ func handleClusters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var infos []ClusterInfo
+	// Use an initialised (non-nil) slice so the response marshals as [] not null.
+	infos := []ClusterInfo{}
 	for _, c := range list.Items {
 		// skip local management cluster
 		if c.Name == "local" {
@@ -114,7 +115,7 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := buildStatusResponse(sc)
+	resp := buildStatusResponse(sc, tc)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -136,13 +137,7 @@ func handleMigrate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := context.Background()
-	cl, err := newClientsFromReq(ctx, req.Kubeconfig, req.TargetRancherConfig)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	sc, tc, _, err := buildClusters(ctx, req.Kubeconfig, req.TargetRancherConfig, req.Source, req.Target)
+	sc, tc, cl, err := buildClusters(ctx, req.Kubeconfig, req.TargetRancherConfig, req.Source, req.Target)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -173,6 +168,10 @@ func handleMigrate(w http.ResponseWriter, r *http.Request) {
 			Message: "Error: " + migrateErr.Error(),
 			Error:   true,
 		})
+	}
+	// Ensure the log field never marshals as null.
+	if logEntries == nil {
+		logEntries = []MigrateLogEntry{}
 	}
 	resp := MigrateResponse{
 		Source:  req.Source,
@@ -299,9 +298,14 @@ func buildClusters(ctx context.Context, kubeconfigPath, targetKubeconfigPath, so
 }
 
 // buildStatusResponse converts a populated + compared Cluster into a StatusResponse.
-func buildStatusResponse(sc *cluster.Cluster) StatusResponse {
+func buildStatusResponse(sc, tc *cluster.Cluster) StatusResponse {
 	resp := StatusResponse{
-		Source: sc.Obj.Spec.DisplayName,
+		Source:       sc.Obj.Spec.DisplayName,
+		Target:       tc.Obj.Spec.DisplayName,
+		// Initialise slices so they marshal as [] rather than null.
+		Projects:     []ProjectStatus{},
+		CRTBs:        []ObjectStatus{},
+		ClusterRepos: []ObjectStatus{},
 	}
 
 	for _, p := range sc.ToMigrate.Projects {
@@ -312,6 +316,8 @@ func buildStatusResponse(sc *cluster.Cluster) StatusResponse {
 				Migrated: p.Migrated,
 				Diff:     p.Diff,
 			},
+			PRTBs:      []ObjectStatus{},
+			Namespaces: []ObjectStatus{},
 		}
 		for _, prtb := range p.PRTBs {
 			ps.PRTBs = append(ps.PRTBs, ObjectStatus{

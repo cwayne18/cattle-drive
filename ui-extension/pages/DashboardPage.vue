@@ -54,6 +54,10 @@ export default {
           throw new Error(data.error || `HTTP ${ res.status }`);
         }
         this.allClusters = data.clusters || [];
+        // Reset cluster selections – they may no longer be valid after
+        // loading a different kubeconfig or API server.
+        this.sourceCluster = null;
+        this.targetCluster = null;
       } catch (err) {
         this.loadError = err.message || String(err);
       } finally {

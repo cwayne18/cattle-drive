@@ -36,6 +36,10 @@ export default {
       return this.overallStatus === STEP.RUNNING;
     },
 
+    isIdle() {
+      return this.overallStatus === STEP.IDLE;
+    },
+
     isDone() {
       return this.overallStatus === STEP.SUCCESS || this.overallStatus === STEP.ERROR;
     },
@@ -100,6 +104,14 @@ export default {
         this.errorMsg      = err.message || String(err);
         this.overallStatus = STEP.ERROR;
       }
+
+      // Scroll log to bottom once results are rendered.
+      this.$nextTick(() => {
+        const body = this.$el.querySelector('.migration-log__body');
+        if (body) {
+          body.scrollTop = body.scrollHeight;
+        }
+      });
     },
 
     stepIcon(entry) {
@@ -145,7 +157,7 @@ export default {
 
     <template v-else>
       <!-- Pre-flight info -->
-      <div v-if="overallStatus === 'idle'" class="preflight mt-20">
+      <div v-if="isIdle" class="preflight mt-20">
         <Banner color="info" class="mb-15">
           <template #default>
             <p>
