@@ -1,21 +1,21 @@
 {{- /*
 UIPlugin CR — tells Rancher Dashboard to load the cattle-drive extension bundle.
 
-The extension bundle (a .tar.gz produced by `npm run build-pkg`) must be hosted
-at an accessible URL.  Set `extension.endpoint` in values.yaml (or via --set) to
-a custom location; if left empty the chart defaults to the GitHub Releases URL
-matching the current chart appVersion.
+Set extension.endpoint to an unpacked plugin URL or extension.compressedEndpoint
+to a tar.gz bundle. If neither is set, the chart defaults compressedEndpoint to
+the GitHub Releases asset for the current chart appVersion.
 */ -}}
-{{- $version := .Chart.AppVersion -}}
+{{- $version := default .Chart.AppVersion .Values.extension.versionOverride -}}
 {{- $endpoint := .Values.extension.endpoint -}}
-{{- if not $endpoint -}}
-  {{- $endpoint = printf "https://github.com/cwayne18/cattle-drive/releases/download/v%s/cattle-drive-%s.tar.gz" $version $version -}}
+{{- $compressedEndpoint := .Values.extension.compressedEndpoint -}}
+{{- if and (not $endpoint) (not $compressedEndpoint) -}}
+  {{- $compressedEndpoint = printf "https://github.com/cwayne18/cattle-drive/releases/download/v%s/cattle-drive-ui-extension-%s.tar.gz" $version $version -}}
 {{- end }}
 apiVersion: catalog.cattle.io/v1
 kind: UIPlugin
 metadata:
   name: cattle-drive
-  namespace: cattle-system
+  namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/name: cattle-drive
     app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
@@ -25,6 +25,14 @@ metadata:
 spec:
   plugin:
     name: cattle-drive
-    version: {{ .Chart.AppVersion | quote }}
+    version: {{ $version | quote }}
+    {{- if $endpoint }}
     endpoint: {{ $endpoint | quote }}
-    noCache: false
+    {{- end }}
+    {{- if $compressedEndpoint }}
+    compressedEndpoint: {{ $compressedEndpoint | quote }}
+    {{- end }}
+    noCache: {{ .Values.extension.noCache }}
+    noAuth: {{ .Values.extension.noAuth }}
+    metadata:
+      {{- toYaml .Values.extension.metadata | nindent 6 }}

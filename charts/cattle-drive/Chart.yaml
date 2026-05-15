@@ -9,9 +9,14 @@ keywords:
   - extension
   - migration
 annotations:
-  catalog.cattle.io/certified: partner
   catalog.cattle.io/display-name: Cattle Drive
+  catalog.cattle.io/namespace: cattle-system
+  catalog.cattle.io/os: linux
+  catalog.cattle.io/permits-os: linux
+  catalog.cattle.io/scope: management
+  catalog.cattle.io/ui-component: plugins
   catalog.cattle.io/kube-version: ">= 1.24.0-0"
   catalog.cattle.io/rancher-version: ">= 2.10.0-0"
   catalog.cattle.io/ui-extensions-version: ">= 3.0.0 < 4.0.0"
   catalog.cattle.io/type: cluster-tool
+icon: https://raw.githubusercontent.com/cwayne18/cattle-drive/main/screenshots/01-dashboard.svg

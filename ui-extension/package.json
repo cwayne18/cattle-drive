@@ -11,20 +11,19 @@
     }
   },
   "scripts": {
-    "dev": "./node_modules/.bin/nuxt dev",
-    "nuxt": "./node_modules/.bin/nuxt",
-    "build-pkg": "shell-pkg build",
-    "publish-pkg": "shell-pkg publish",
+    "dev": "NODE_ENV=dev ./node_modules/.bin/vue-cli-service serve",
+    "build": "./node_modules/.bin/vue-cli-service build",
+    "build-pkg": "sh -c 'set -e; mkdir -p pkg; rm -f pkg/cattle-drive; ln -s .. pkg/cattle-drive; trap \"rm -f pkg/cattle-drive\" EXIT; ./node_modules/@rancher/shell/scripts/build-pkg.sh cattle-drive tarball'",
+    "publish-pkg": "./node_modules/@rancher/shell/scripts/extension/publish",
     "type-check": "tsc --noEmit"
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=20"
   },
   "devDependencies": {
-    "@rancher/shell": "~0.8.0",
-    "@vue/cli-plugin-babel": "~5.0.0",
-    "@vue/cli-service": "~5.0.0",
-    "@vue/cli-plugin-typescript": "~5.0.0"
+    "@rancher/shell": "3.0.8",
+    "@vue/cli-plugin-babel": "5.0.8",
+    "@vue/cli-plugin-typescript": "5.0.8"
   },
   "browserslist": [
     "> 1%",

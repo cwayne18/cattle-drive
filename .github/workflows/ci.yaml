@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  typecheck-extension:
+  build-extension:
     runs-on: ubuntu-22.04
     defaults:
       run:
@@ -21,21 +21,43 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
-          cache-dependency-path: ui-extension/package.json
+          cache: yarn
+          cache-dependency-path: ui-extension/yarn.lock
+      - name: Enable Corepack
+        run: corepack enable
       - name: Install dependencies
-        run: npm install
+        run: yarn install --ignore-scripts
       - name: TypeScript type-check
-        run: npm run type-check
+        run: yarn type-check
+      - name: Build extension package
+        run: yarn build-pkg
+      - name: Prepare extension release asset
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION="${VERSION#v}"
+          ASSET="cattle-drive-ui-extension-${VERSION}.tar.gz"
+          PKG_PATH="$(find . -type f -name '*.tar.gz' | head -n1)"
+          test -n "${PKG_PATH}"
+          cp "${PKG_PATH}" "../${ASSET}"
+      - name: Upload extension release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: cattle-drive-ui-extension
+          path: cattle-drive-ui-extension-*.tar.gz
 
   release-tag:
     runs-on: ubuntu-22.04
-    needs: typecheck-extension
+    needs: build-extension
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+      - name: Download extension release asset
+        uses: actions/download-artifact@v4
+        with:
+          name: cattle-drive-ui-extension
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
@@ -50,3 +72,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GORELEASER_CURRENT_TAG: ${{ github.ref_name }}
+      - name: Upload extension bundle to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.ref_name }}" cattle-drive-ui-extension-*.tar.gz --clobber

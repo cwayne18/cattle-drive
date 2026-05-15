@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"rancherlabs/cattle-drive/pkg/api"
+	"strings"
 	"syscall"
 	"time"
 
@@ -14,9 +15,10 @@ import (
 )
 
 var (
-	listenAddr        string
-	apiToken          string
-	defaultKubeconfig string
+	listenAddr         string
+	apiToken           string
+	defaultKubeconfig  string
+	corsAllowedOrigins string
 )
 
 // NewCommand returns the "serve" CLI sub-command that starts the HTTP API server.
@@ -43,6 +45,12 @@ func NewCommand() *cli.Command {
 				EnvVars:     []string{"CATTLE_DRIVE_DEFAULT_KUBECONFIG", "CATTLE_DRIVE_KUBECONFIG"},
 				Destination: &defaultKubeconfig,
 			},
+			&cli.StringFlag{
+				Name:        "cors-allowed-origins",
+				Usage:       "Comma-separated browser origins allowed for cross-origin requests (default: same-origin proxy only)",
+				EnvVars:     []string{"CATTLE_DRIVE_CORS_ALLOWED_ORIGINS"},
+				Destination: &corsAllowedOrigins,
+			},
 		},
 		Action: serve,
 	}
@@ -52,6 +60,7 @@ func serve(clx *cli.Context) error {
 	opts := api.ServerOptions{
 		APIToken:          apiToken,
 		DefaultKubeconfig: defaultKubeconfig,
+		AllowedOrigins:    splitAndTrim(corsAllowedOrigins),
 	}
 	srv := &http.Server{
 		Addr:    listenAddr,
@@ -68,6 +77,11 @@ func serve(clx *cli.Context) error {
 		fmt.Printf("Default kubeconfig: %s\n", defaultKubeconfig)
 	} else {
 		fmt.Println("No default kubeconfig configured; clients must send kubeconfig in requests")
+	}
+	if len(opts.AllowedOrigins) > 0 {
+		fmt.Printf("CORS allowed origins: %s\n", strings.Join(opts.AllowedOrigins, ", "))
+	} else {
+		fmt.Println("CORS allowed origins: none (same-origin Rancher proxy only)")
 	}
 	fmt.Println("Endpoints:")
 	fmt.Println("  POST /api/clusters  - list downstream clusters")
@@ -97,4 +111,19 @@ func serve(clx *cli.Context) error {
 		defer cancel()
 		return srv.Shutdown(ctx)
 	}
+}
+
+func splitAndTrim(csv string) []string {
+	if csv == "" {
+		return nil
+	}
+	parts := strings.Split(csv, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }

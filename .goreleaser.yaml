@@ -39,9 +39,6 @@ archives:
         format: zip
 
 release:
-  github:
-    owner: rancherlabs
-    name: cattle-drive
   prerelease: auto
 
 changelog:

@@ -63,11 +63,11 @@ calling Rancher APIs directly.
 ### API Server
 
 Before using the UI extension you must start the cattle-drive HTTP API server on a host that can
-reach the Rancher local cluster. For real Rancher installs, configure a default kubeconfig on the
-server so UI requests do not need to send filesystem paths:
+reach the Rancher local cluster. For real Rancher installs, run it in-cluster and use the special
+`incluster` default so UI requests do not need to send filesystem paths:
 
 ```sh
-cattle-drive serve --listen 0.0.0.0:8080 --default-kubeconfig /var/lib/cattle-drive/kubeconfig.yaml
+cattle-drive serve --listen 0.0.0.0:8080 --default-kubeconfig incluster
 ```
 
 `--listen 0.0.0.0:8080` is convenient for local testing; for production, run it as an
@@ -83,7 +83,9 @@ This starts a lightweight HTTP server exposing three endpoints:
 | `GET`  | `/healthz` | Health check |
 
 All endpoints accept and return JSON. A request may include a server-side `kubeconfig` path, but
-when `--default-kubeconfig` is configured the field can be omitted. Example:
+when `--default-kubeconfig` is configured the field can be omitted. When exposing the API directly
+for local development, set `--cors-allowed-origins` to the Rancher UI origin instead of relying on
+wildcard CORS. Example:
 
 ```sh
 # List clusters
@@ -151,18 +153,18 @@ ui-extension/
 
 ### Installing the extension
 
-1. Start the cattle-drive API server on a reachable host: `cattle-drive serve`
+1. Install the chart in the local cluster (defaults to the `cattle-system` namespace).
 2. In Rancher Manager, go to the **local** cluster → **Apps** → **Repositories**.
 3. Click **Create** and add this repository as a Git-based Helm repository.
 4. Open the **Extensions** page and install the **cattle-drive** extension.
-5. Expose the cattle-drive API server as a Service in the local cluster and use Rancher's proxy path.
+5. Use the in-cluster `cattle-drive-api` Service through Rancher's proxy path.
 6. In the extension **Dashboard**, keep the default Rancher proxy URL and (optionally) set a kubeconfig override.
 
 ### Developing locally
 
 ```sh
 # Start the API server
-cattle-drive serve --listen 0.0.0.0:8080
+cattle-drive serve --listen 0.0.0.0:8080 --cors-allowed-origins https://127.0.0.1:8005
 
 # From the rancher/dashboard repo root, with this repo checked out alongside it:
 yarn install --frozen-lockfile

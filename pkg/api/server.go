@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/subtle"
 	"net/http"
+	"slices"
 	"strings"
 )
 
@@ -13,6 +14,9 @@ type ServerOptions struct {
 	APIToken string
 	// DefaultKubeconfig is used when request bodies omit "kubeconfig".
 	DefaultKubeconfig string
+	// AllowedOrigins controls which cross-origin browser requests receive CORS
+	// response headers. Leave empty to rely on same-origin Rancher proxy calls.
+	AllowedOrigins []string
 }
 
 // NewServer returns an http.Handler that mounts all cattle-drive API routes.
@@ -33,7 +37,7 @@ func NewServer(opts ServerOptions) http.Handler {
 		if opts.APIToken != "" {
 			h = bearerAuth(opts.APIToken, h)
 		}
-		return corsMiddleware(h)
+		return corsMiddleware(opts.AllowedOrigins, h)
 	}
 
 	mux.HandleFunc("/api/clusters", wrap(func(w http.ResponseWriter, r *http.Request) {
@@ -55,14 +59,25 @@ func NewServer(opts ServerOptions) http.Handler {
 	return mux
 }
 
-// corsMiddleware adds CORS headers and handles pre-flight OPTIONS requests so
-// that the Rancher Dashboard (running on a different origin during development)
-// can call the API.
-func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
+// corsMiddleware adds CORS headers for explicitly allowed origins and handles
+// pre-flight OPTIONS requests. When no origins are configured the API relies on
+// same-origin Rancher proxy calls and emits no Access-Control-Allow-Origin
+// header, which keeps the default deployment closed to arbitrary browsers.
+func corsMiddleware(allowedOrigins []string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			w.Header().Add("Vary", "Origin")
+		}
+		if allowOrigin(origin, allowedOrigins) {
+			if slices.Contains(allowedOrigins, "*") {
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+			} else {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+			}
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		}
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -70,6 +85,13 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	}
+}
+
+func allowOrigin(origin string, allowedOrigins []string) bool {
+	if origin == "" || len(allowedOrigins) == 0 {
+		return false
+	}
+	return slices.Contains(allowedOrigins, "*") || slices.Contains(allowedOrigins, origin)
 }
 
 // bearerAuth returns middleware that enforces "Authorization: Bearer <token>"

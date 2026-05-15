@@ -5,6 +5,15 @@
 # Defaults to the GitHub Releases URL for the current chart version.
 extension:
   endpoint: ""
+  compressedEndpoint: ""
+  versionOverride: ""
+  noCache: false
+  noAuth: false
+  metadata:
+    displayName: Cattle Drive
+    description: Rancher UI extension for migrating Rancher objects between downstream clusters
+    source: https://github.com/cwayne18/cattle-drive
+    icon: https://raw.githubusercontent.com/cwayne18/cattle-drive/main/screenshots/01-dashboard.svg
 
 # -- API server image configuration.
 image:
@@ -32,8 +41,13 @@ serviceAccount:
 # -- Additional labels to apply to all resources.
 commonLabels: {}
 
+# -- Optional browser origins allowed to call the API directly. Leave empty to
+# require Rancher's same-origin proxy path.
+api:
+  corsAllowedOrigins: []
+
 # -- NetworkPolicy: restrict direct access to the API service.
-# When enabled, only pods in the cattle-system namespace that carry the
+# When enabled, only pods in the release namespace that carry the
 # rancher pod label may reach the cattle-drive-api Service.
 networkPolicy:
   enabled: true

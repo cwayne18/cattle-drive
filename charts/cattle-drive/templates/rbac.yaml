@@ -57,5 +57,5 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: {{ .Values.serviceAccount.name }}
-    namespace: cattle-system
+    namespace: {{ .Release.Namespace }}
 {{- end }}

@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: cattle-drive-api
-  namespace: cattle-system
+  namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/name: cattle-drive
     app.kubernetes.io/component: api-server
@@ -35,6 +35,9 @@ spec:
             # Use the in-cluster ServiceAccount token (mounted automatically).
             # Remove --default-kubeconfig if you prefer an explicit kubeconfig secret.
             - --default-kubeconfig=incluster
+            {{- if .Values.api.corsAllowedOrigins }}
+            - --cors-allowed-origins={{ join "," .Values.api.corsAllowedOrigins }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 8080

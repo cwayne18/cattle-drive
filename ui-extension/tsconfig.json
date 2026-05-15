@@ -3,18 +3,15 @@
     "target": "esnext",
     "module": "esnext",
     "strict": true,
+    "allowJs": true,
     "jsx": "preserve",
     "importHelpers": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "experimentalDecorators": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "sourceMap": true,
-    "baseUrl": ".",
-    "paths": {
-      "@shell/*": ["../node_modules/@rancher/shell/*"]
-    }
+    "sourceMap": true
   },
   "include": [
     "**/*.ts",

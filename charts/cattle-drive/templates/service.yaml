@@ -1,17 +1,18 @@
 # ClusterIP Service for the cattle-drive API server.
 #
-# The name "cattle-drive-api" matches the Rancher proxy path hard-coded in the
+# The name "cattle-drive-api" matches the default Rancher proxy path used by the
 # UI extension:
 #   /k8s/clusters/local/api/v1/namespaces/cattle-system/services/http:cattle-drive-api:8080/proxy
 #
 # TLS is terminated by Rancher's HTTPS proxy; this Service intentionally runs
-# plain HTTP on port 8080.  The NetworkPolicy (if enabled) ensures only the
-# Rancher pod can reach it directly.
+# plain HTTP on port 8080. The default chart namespace is cattle-system so the
+# proxy path works without changes; if you install elsewhere, update the UI
+# connection settings to point at the matching proxy namespace.
 apiVersion: v1
 kind: Service
 metadata:
   name: cattle-drive-api
-  namespace: cattle-system
+  namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/name: cattle-drive
     app.kubernetes.io/component: api-server

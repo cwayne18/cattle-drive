@@ -195,17 +195,18 @@ func TestBuildStatusResponse_NilSlicesMarshallAsArrays(t *testing.T) {
 // ── corsMiddleware ────────────────────────────────────────────────────────────
 
 func TestCORSMiddleware_OptionsReturns204(t *testing.T) {
-	handler := corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	handler := corsMiddleware([]string{"https://rancher.example.com"}, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 	req := httptest.NewRequest(http.MethodOptions, "/api/clusters", nil)
+	req.Header.Set("Origin", "https://rancher.example.com")
 	w := httptest.NewRecorder()
 	handler(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Errorf("expected 204, got %d", w.Code)
 	}
-	if w.Header().Get("Access-Control-Allow-Origin") != "*" {
+	if w.Header().Get("Access-Control-Allow-Origin") != "https://rancher.example.com" {
 		t.Error("missing CORS origin header")
 	}
 	if w.Header().Get("Access-Control-Allow-Headers") == "" {
@@ -215,19 +216,37 @@ func TestCORSMiddleware_OptionsReturns204(t *testing.T) {
 
 func TestCORSMiddleware_PassesNonOptions(t *testing.T) {
 	called := false
-	handler := corsMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	handler := corsMiddleware([]string{"https://rancher.example.com"}, func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/clusters", nil)
+	req.Header.Set("Origin", "https://rancher.example.com")
 	w := httptest.NewRecorder()
 	handler(w, req)
 
 	if !called {
 		t.Error("inner handler was not called")
 	}
-	if w.Header().Get("Access-Control-Allow-Origin") != "*" {
+	if w.Header().Get("Access-Control-Allow-Origin") != "https://rancher.example.com" {
 		t.Error("missing CORS origin header on POST response")
+	}
+}
+
+func TestCORSMiddleware_DefaultSameOriginModeOmitsCORSHeaders(t *testing.T) {
+	handler := corsMiddleware(nil, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	req := httptest.NewRequest(http.MethodOptions, "/api/clusters", nil)
+	req.Header.Set("Origin", "https://dashboard.example.com")
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("expected 204, got %d", w.Code)
+	}
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("expected no CORS origin header, got %q", got)
 	}
 }
 
@@ -469,6 +488,22 @@ func TestResolveKubeconfig(t *testing.T) {
 	})
 }
 
+func TestIsInClusterConfigValue(t *testing.T) {
+	cases := map[string]bool{
+		"incluster":       true,
+		"in-cluster":      true,
+		" INCLUSTER ":     true,
+		"/tmp/kubeconfig": false,
+		"":                false,
+	}
+
+	for input, want := range cases {
+		if got := isInClusterConfigValue(input); got != want {
+			t.Fatalf("isInClusterConfigValue(%q) = %v, want %v", input, got, want)
+		}
+	}
+}
+
 // ── NewServer route smoke test ────────────────────────────────────────────────
 
 func TestNewServer_RoutesRegistered(t *testing.T) {
@@ -534,16 +569,20 @@ func TestNewServer_AuthAllowsCorrectToken(t *testing.T) {
 func TestNewServer_CORSOptionsNoAuth(t *testing.T) {
 	// Pre-flight OPTIONS to an API endpoint must succeed without auth even
 	// when a token is configured.
-	srv := NewServer(ServerOptions{APIToken: "secret"})
+	srv := NewServer(ServerOptions{
+		APIToken:       "secret",
+		AllowedOrigins: []string{"https://rancher.example.com"},
+	})
 
 	req := httptest.NewRequest(http.MethodOptions, "/api/clusters", nil)
+	req.Header.Set("Origin", "https://rancher.example.com")
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Errorf("expected 204 for OPTIONS pre-flight, got %d", w.Code)
 	}
-	if w.Header().Get("Access-Control-Allow-Origin") != "*" {
+	if w.Header().Get("Access-Control-Allow-Origin") != "https://rancher.example.com" {
 		t.Error("missing CORS origin header on OPTIONS response")
 	}
 }

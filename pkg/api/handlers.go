@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"rancherlabs/cattle-drive/pkg/client"
 	"rancherlabs/cattle-drive/pkg/cluster"
+	"strings"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -56,7 +57,7 @@ func handleClustersWithDefault(defaultKubeconfig string, w http.ResponseWriter, 
 	}
 
 	ctx := context.Background()
-	restCfg, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	restCfg, err := buildRESTConfig(kubeconfigPath)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "failed to load kubeconfig: "+err.Error())
 		return
@@ -218,7 +219,7 @@ type clusterClients struct {
 // newClientsFromReq builds source and (optionally separate) target Clients from
 // the kubeconfig paths supplied in the request.
 func newClientsFromReq(ctx context.Context, kubeconfigPath, targetKubeconfigPath string) (*clusterClients, error) {
-	restCfg, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	restCfg, err := buildRESTConfig(kubeconfigPath)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +230,7 @@ func newClientsFromReq(ctx context.Context, kubeconfigPath, targetKubeconfigPath
 
 	targetCl := sourceCl
 	if targetKubeconfigPath != "" {
-		targetRestCfg, err := clientcmd.BuildConfigFromFlags("", targetKubeconfigPath)
+		targetRestCfg, err := buildRESTConfig(targetKubeconfigPath)
 		if err != nil {
 			return nil, err
 		}
@@ -249,14 +250,14 @@ func buildClusters(ctx context.Context, kubeconfigPath, targetKubeconfigPath, so
 		return nil, nil, nil, err
 	}
 
-	restCfg, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	restCfg, err := buildRESTConfig(kubeconfigPath)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	var targetRestCfg *rest.Config
 	if targetKubeconfigPath != "" {
-		targetRestCfg, err = clientcmd.BuildConfigFromFlags("", targetKubeconfigPath)
+		targetRestCfg, err = buildRESTConfig(targetKubeconfigPath)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -329,6 +330,22 @@ func resolveKubeconfig(reqKubeconfig, defaultKubeconfig string) (string, error) 
 		return defaultKubeconfig, nil
 	}
 	return "", errors.New("kubeconfig is required")
+}
+
+func buildRESTConfig(kubeconfigPath string) (*rest.Config, error) {
+	if isInClusterConfigValue(kubeconfigPath) {
+		return rest.InClusterConfig()
+	}
+	return clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+}
+
+func isInClusterConfigValue(kubeconfigPath string) bool {
+	switch strings.ToLower(strings.TrimSpace(kubeconfigPath)) {
+	case "incluster", "in-cluster":
+		return true
+	default:
+		return false
+	}
 }
 
 // buildStatusResponse converts a populated + compared source Cluster (sc) and its
