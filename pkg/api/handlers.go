@@ -339,6 +339,8 @@ func buildRESTConfig(kubeconfigPath string) (*rest.Config, error) {
 	return clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 }
 
+// isInClusterConfigValue returns true for the documented "incluster" sentinel
+// as well as the hyphenated "in-cluster" variant for compatibility.
 func isInClusterConfigValue(kubeconfigPath string) bool {
 	switch strings.ToLower(strings.TrimSpace(kubeconfigPath)) {
 	case "incluster", "in-cluster":

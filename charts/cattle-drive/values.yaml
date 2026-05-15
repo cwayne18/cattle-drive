@@ -13,7 +13,6 @@ extension:
     displayName: Cattle Drive
     description: Rancher UI extension for migrating Rancher objects between downstream clusters
     source: https://github.com/cwayne18/cattle-drive
-    icon: https://raw.githubusercontent.com/cwayne18/cattle-drive/main/screenshots/01-dashboard.svg
 
 # -- API server image configuration.
 image:
