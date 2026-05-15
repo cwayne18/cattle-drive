@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"rancherlabs/cattle-drive/pkg/client"
 	"rancherlabs/cattle-drive/pkg/cluster"
@@ -13,6 +14,10 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+// maxBodyBytes is the maximum request-body size the API will read (1 MiB).
+// Oversized bodies are rejected with 413 before any parsing occurs.
+const maxBodyBytes = 1 << 20 // 1 MiB
 
 // writeJSON serialises v as JSON and writes it with the given status code.
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -34,6 +39,7 @@ func handleClusters(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	var req StatusRequest // reuse – only kubeconfig is needed
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
@@ -85,6 +91,7 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	var req StatusRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
@@ -98,7 +105,12 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	sc, tc, cl, err := buildClusters(ctx, req.Kubeconfig, req.TargetRancherConfig, req.Source, req.Target)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		var notFound *clusterNotFoundError
+		if errors.As(err, &notFound) {
+			writeError(w, http.StatusNotFound, err.Error())
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
 
@@ -126,6 +138,7 @@ func handleMigrate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	var req MigrateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
@@ -139,7 +152,12 @@ func handleMigrate(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	sc, tc, cl, err := buildClusters(ctx, req.Kubeconfig, req.TargetRancherConfig, req.Source, req.Target)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		var notFound *clusterNotFoundError
+		if errors.As(err, &notFound) {
+			writeError(w, http.StatusNotFound, err.Error())
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
 
