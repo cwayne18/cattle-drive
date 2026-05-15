@@ -10,7 +10,7 @@ const CATALOG_REPO = 'catalog.cattle.io.clusterrepo';
 
 const SKIP_PROJECTS    = ['Default', 'System'];
 const SKIP_CRTB_NAMES  = ['creator-cluster-owner'];
-const SKIP_CRTB_PREFIX = ['fleet-default-owner'];
+const SKIP_CRTB_PREFIXES = ['fleet-default-owner'];
 const SKIP_REPO_PREFIX = 'rancher-';
 
 const STEP = {
@@ -137,7 +137,7 @@ export default {
         );
         const srcCRTBs = allCRTBs
           .filter(c => c.metadata?.namespace === this.sourceId)
-          .filter(c => !SKIP_CRTB_NAMES.includes(c.name) && !SKIP_CRTB_PREFIX.some(p => c.name?.startsWith(p)));
+          .filter(c => !SKIP_CRTB_NAMES.includes(c.name) && !SKIP_CRTB_PREFIXES.some(p => c.name?.startsWith(p)));
 
         const srcRepos = allRepos.filter(
           r => !r.metadata?.name?.startsWith(SKIP_REPO_PREFIX)

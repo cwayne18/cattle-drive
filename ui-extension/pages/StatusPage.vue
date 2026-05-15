@@ -94,24 +94,27 @@ export default {
       this.fetchError = null;
 
       try {
-        // Fetch projects, role bindings, repos for both clusters in parallel
+        // Fetch all object types in parallel; the management store is shared so
+        // filtering by clusterName afterwards is both correct and cache-friendly.
         const [
-          sourceProjects,
-          targetProjects,
+          allProjects,
           allPRTBs,
-          sourceCRTBs,
-          targetCRTBs,
-          sourceRepos,
-          targetRepos,
+          allCRTBs,
+          allRepos,
         ] = await Promise.all([
-          this.$store.dispatch('management/findAll', { type: MGMT_PROJECT }),
           this.$store.dispatch('management/findAll', { type: MGMT_PROJECT }),
           this.$store.dispatch('management/findAll', { type: MGMT_PRTB }),
           this.$store.dispatch('management/findAll', { type: MGMT_CRTB }),
-          this.$store.dispatch('management/findAll', { type: MGMT_CRTB }),
-          this.$store.dispatch('management/findAll', { type: CATALOG_REPO }),
           this.$store.dispatch('management/findAll', { type: CATALOG_REPO }),
         ]);
+
+        // Split by cluster
+        const sourceProjects = allProjects;
+        const targetProjects = allProjects;
+        const sourceCRTBs    = allCRTBs;
+        const targetCRTBs    = allCRTBs;
+        const sourceRepos    = allRepos;
+        const targetRepos    = allRepos;
 
         // Filter by cluster
         const srcProjects = sourceProjects
