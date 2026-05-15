@@ -1,0 +1,30 @@
+{{- /*
+UIPlugin CR — tells Rancher Dashboard to load the cattle-drive extension bundle.
+
+The extension bundle (a .tar.gz produced by `npm run build-pkg`) must be hosted
+at an accessible URL.  Set `extension.endpoint` in values.yaml (or via --set) to
+a custom location; if left empty the chart defaults to the GitHub Releases URL
+matching the current chart appVersion.
+*/ -}}
+{{- $version := .Chart.AppVersion -}}
+{{- $endpoint := .Values.extension.endpoint -}}
+{{- if not $endpoint -}}
+  {{- $endpoint = printf "https://github.com/cwayne18/cattle-drive/releases/download/v%s/cattle-drive-%s.tar.gz" $version $version -}}
+{{- end }}
+apiVersion: catalog.cattle.io/v1
+kind: UIPlugin
+metadata:
+  name: cattle-drive
+  namespace: cattle-system
+  labels:
+    app.kubernetes.io/name: cattle-drive
+    app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+    {{- with .Values.commonLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  plugin:
+    name: cattle-drive
+    version: {{ .Chart.AppVersion | quote }}
+    endpoint: {{ $endpoint | quote }}
+    noCache: false

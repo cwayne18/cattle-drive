@@ -1,0 +1,17 @@
+apiVersion: v2
+name: cattle-drive
+description: Rancher UI extension and API server for migrating cluster objects between downstream clusters
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - rancher
+  - extension
+  - migration
+annotations:
+  catalog.cattle.io/certified: partner
+  catalog.cattle.io/display-name: Cattle Drive
+  catalog.cattle.io/kube-version: ">= 1.24.0-0"
+  catalog.cattle.io/rancher-version: ">= 2.10.0-0"
+  catalog.cattle.io/ui-extensions-version: ">= 3.0.0 < 4.0.0"
+  catalog.cattle.io/type: cluster-tool
