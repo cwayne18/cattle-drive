@@ -1,5 +1,6 @@
 <script>
 import { PRODUCT_NAME, PAGES } from '../product';
+import { DEFAULT_PROXY_API_BASE, authHeaders } from '../utils/api';
 
 const STATUS = {
   MIGRATED:     'migrated',
@@ -14,7 +15,7 @@ export default {
     const q = this.$route.query;
     this.sourceId      = q.source     || '';
     this.targetId      = q.target     || '';
-    this.apiBase       = q.apiBase    || '/k8s/clusters/local/api/v1/namespaces/cattle-system/services/http:cattle-drive-api:8080/proxy';
+    this.apiBase       = q.apiBase    || DEFAULT_PROXY_API_BASE;
     this.kubeconfigPath = q.kubeconfig || '';
 
     if (this.sourceId && this.targetId) {
@@ -26,7 +27,7 @@ export default {
     return {
       sourceId:       '',
       targetId:       '',
-      apiBase:        '/k8s/clusters/local/api/v1/namespaces/cattle-system/services/http:cattle-drive-api:8080/proxy',
+      apiBase:        DEFAULT_PROXY_API_BASE,
       kubeconfigPath: '',
       sections:       [],
       fetchError:     null,
@@ -66,16 +67,6 @@ export default {
   },
 
   methods: {
-    authHeaders() {
-      const headers = { 'Content-Type': 'application/json' };
-      const rawToken = this.$store?.getters?.['auth/token'];
-      const token = typeof rawToken === 'string' ? rawToken : (rawToken?.token || rawToken?.value);
-      if (token) {
-        headers.Authorization = `Bearer ${ token }`;
-      }
-      return headers;
-    },
-
     async loadStatus() {
       this.loading = true;
       this.fetchError = null;
@@ -91,7 +82,7 @@ export default {
         const res = await fetch(`${ this.apiBase }/api/status`, {
           method:  'POST',
           credentials: 'same-origin',
-          headers: this.authHeaders(),
+          headers: authHeaders(this.$store),
           body:    JSON.stringify(body),
         });
         const data = await res.json();

@@ -70,6 +70,9 @@ server so UI requests do not need to send filesystem paths:
 cattle-drive serve --listen 0.0.0.0:8080 --default-kubeconfig /var/lib/cattle-drive/kubeconfig.yaml
 ```
 
+`--listen 0.0.0.0:8080` is convenient for local testing; for production, run it as an
+in-cluster Service and expose it through Rancher's proxy path instead of direct public access.
+
 This starts a lightweight HTTP server exposing three endpoints:
 
 | Method | Path | Description |

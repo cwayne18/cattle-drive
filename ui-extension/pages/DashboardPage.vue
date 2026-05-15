@@ -1,5 +1,6 @@
 <script>
 import { PRODUCT_NAME, PAGES } from '../product';
+import { DEFAULT_PROXY_API_BASE, authHeaders } from '../utils/api';
 
 export default {
   name: 'CattleDriveDashboard',
@@ -7,7 +8,7 @@ export default {
   data() {
     return {
       // Prefer Rancher auth-aware in-cluster proxy by default.
-      apiBase:       '/k8s/clusters/local/api/v1/namespaces/cattle-system/services/http:cattle-drive-api:8080/proxy',
+      apiBase:       DEFAULT_PROXY_API_BASE,
       kubeconfigPath: '',
       allClusters:   [],
       sourceCluster: null,
@@ -39,16 +40,6 @@ export default {
   },
 
   methods: {
-    authHeaders() {
-      const headers = { 'Content-Type': 'application/json' };
-      const rawToken = this.$store?.getters?.['auth/token'];
-      const token = typeof rawToken === 'string' ? rawToken : (rawToken?.token || rawToken?.value);
-      if (token) {
-        headers.Authorization = `Bearer ${ token }`;
-      }
-      return headers;
-    },
-
     async fetchClusters() {
       if (!this.canFetch) return;
       this.loadingClusters = true;
@@ -61,7 +52,7 @@ export default {
         const res = await fetch(`${ this.apiBase }/api/clusters`, {
           method:  'POST',
           credentials: 'same-origin',
-          headers: this.authHeaders(),
+          headers: authHeaders(this.$store),
           body:    JSON.stringify(body),
         });
         const data = await res.json();
