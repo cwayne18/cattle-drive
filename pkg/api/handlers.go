@@ -297,7 +297,8 @@ func buildClusters(ctx context.Context, kubeconfigPath, targetKubeconfigPath, so
 	return sc, tc, cl, nil
 }
 
-// buildStatusResponse converts a populated + compared Cluster into a StatusResponse.
+// buildStatusResponse converts a populated + compared source Cluster (sc) and its
+// target Cluster (tc) into a StatusResponse suitable for JSON serialisation.
 func buildStatusResponse(sc, tc *cluster.Cluster) StatusResponse {
 	resp := StatusResponse{
 		Source:       sc.Obj.Spec.DisplayName,

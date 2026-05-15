@@ -105,7 +105,9 @@ export default {
         this.overallStatus = STEP.ERROR;
       }
 
-      // Scroll log to bottom once results are rendered.
+      // Scroll log to the bottom so the user sees the final entry.
+      // This is useful both for seeing the last "Done" on success and
+      // for seeing the error entry at the end of a failed migration.
       this.$nextTick(() => {
         const body = this.$el.querySelector('.migration-log__body');
         if (body) {
