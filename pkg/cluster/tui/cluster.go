@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"rancherlabs/cattle-drive/pkg/cluster"
 	"rancherlabs/cattle-drive/pkg/cluster/tui/constants"
 	"strings"
 	"time"
@@ -148,7 +149,8 @@ func (m *Model) migrateCluster(ctx context.Context) {
 	if cl == nil {
 		cl = constants.Lclient
 	}
-	if err := constants.SC.Migrate(ctx, cl, constants.TC, &constants.LogFile); err != nil {
+	logger := &cluster.WriterLogger{W: &constants.LogFile}
+	if err := constants.SC.Migrate(ctx, cl, constants.TC, logger); err != nil {
 		fmt.Fprintf(&constants.LogFile, "[%s] [error] %v\n", time.Now().String(), err)
 		m.Update(tea.Quit())
 	}

@@ -1,0 +1,37 @@
+{{- if .Values.networkPolicy.enabled }}
+# Restrict direct access to the cattle-drive-api Service.
+#
+# Only pods labelled app=rancher (the Rancher server) inside cattle-system are
+# allowed to reach port 8080.  All other ingress is denied, which prevents
+# any pod that has obtained a service-account token from bypassing the
+# Rancher authentication proxy and calling the API directly.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cattle-drive-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: cattle-drive
+    app.kubernetes.io/component: api-server
+    {{- with .Values.commonLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: cattle-drive
+      app.kubernetes.io/component: api-server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Release.Namespace }}
+          podSelector:
+            matchLabels:
+              app: rancher
+      ports:
+        - protocol: TCP
+          port: 8080
+{{- end }}

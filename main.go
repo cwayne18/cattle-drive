@@ -7,6 +7,7 @@ import (
 	"rancherlabs/cattle-drive/cli/cmds"
 	"rancherlabs/cattle-drive/cli/cmds/interactive"
 	"rancherlabs/cattle-drive/cli/cmds/migrate"
+	"rancherlabs/cattle-drive/cli/cmds/serve"
 	"rancherlabs/cattle-drive/cli/cmds/status"
 	"rancherlabs/cattle-drive/pkg/version"
 
@@ -20,6 +21,7 @@ func main() {
 		status.NewCommand(),
 		migrate.NewCommand(),
 		interactive.NewCommand(),
+		serve.NewCommand(),
 	}
 	app.Version = fmt.Sprintf("%s (%s)", version.Version, version.GitCommit)
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"rancherlabs/cattle-drive/pkg/client"
 	"reflect"
 	"strings"
@@ -300,35 +299,34 @@ func (c *Cluster) Status(ctx context.Context) error {
 	return nil
 }
 
-func (c *Cluster) Migrate(ctx context.Context, client *client.Clients, tc *Cluster, w io.Writer) error {
-	fmt.Fprintf(w, "Migrating Objects from cluster [%s] to cluster [%s]:\n", c.Obj.Spec.DisplayName, tc.Obj.Spec.DisplayName)
+func (c *Cluster) Migrate(ctx context.Context, client *client.Clients, tc *Cluster, logger MigrateLogger) error {
 	// users
 	if c.ExternalRancher {
 		for _, u := range c.ToMigrate.Users {
 			if !u.Migrated {
-				fmt.Fprintf(w, "- migrating User [%s]... ", u.Obj.Username)
-
 				u.Mutate()
 				if err := client.Users.Create(ctx, "", u.Obj, nil, v1.CreateOptions{}); err != nil {
+					logger.LogEvent(MigrateEvent{Kind: "user", Name: u.Obj.Username, Err: err})
 					return err
 				}
 				// migrating all grbs for this user
 				for _, grb := range u.GlobalRoleBindings {
 					grb.Mutate()
 					if err := client.GlobalRoleBindings.Create(ctx, "", grb.Obj, nil, v1.CreateOptions{}); err != nil {
+						logger.LogEvent(MigrateEvent{Kind: "user", Name: u.Obj.Username, Err: err})
 						return err
 					}
 				}
-				fmt.Fprintf(w, "Done.\n")
+				logger.LogEvent(MigrateEvent{Kind: "user", Name: u.Obj.Username})
 			}
 		}
 	}
 
 	for _, p := range c.ToMigrate.Projects {
 		if !p.Migrated {
-			fmt.Fprintf(w, "- migrating Project [%s]... ", p.Name)
 			p.Mutate(tc)
 			if err := client.Projects.Create(ctx, tc.Obj.Name, p.Obj, nil, v1.CreateOptions{}); err != nil {
+				logger.LogEvent(MigrateEvent{Kind: "project", Name: p.Name, Err: err})
 				return err
 			}
 			// set ProjectName for all ns and prtbs for this project
@@ -338,18 +336,19 @@ func (c *Cluster) Migrate(ctx context.Context, client *client.Clients, tc *Clust
 			for _, ns := range p.Namespaces {
 				ns.ProjectName = p.Obj.Name
 			}
-			fmt.Fprintf(w, "Done.\n")
+			logger.LogEvent(MigrateEvent{Kind: "project", Name: p.Name})
 		}
 
 		for _, prtb := range p.PRTBs {
 			if !prtb.Migrated {
-				fmt.Fprintf(w, "  - migrating PRTB [%s]... ", prtb.Name)
 				// check if the user exists first in case of external rancher
 				userID := prtb.Obj.UserName
 				var user v3.User
 				if err := client.Users.Get(ctx, "", userID, &user, v1.GetOptions{}); err != nil {
 					if apierrors.IsNotFound(err) {
-						return errors.New("user " + userID + " does not exists, please migrate user first")
+						migrateErr := errors.New("user " + userID + " does not exists, please migrate user first")
+						logger.LogEvent(MigrateEvent{Kind: "prtb", Name: prtb.Name, Err: migrateErr})
+						return migrateErr
 					}
 				}
 
@@ -361,50 +360,53 @@ func (c *Cluster) Migrate(ctx context.Context, client *client.Clients, tc *Clust
 				}
 				prtb.Mutate(tc.Obj.Name, prtb.ProjectName, backingNamespace)
 				if err := client.ProjectRoleTemplateBindings.Create(ctx, namespace, prtb.Obj, nil, v1.CreateOptions{}); err != nil {
+					logger.LogEvent(MigrateEvent{Kind: "prtb", Name: prtb.Name, Err: err})
 					return err
 				}
-				fmt.Fprintf(w, "Done.\n")
+				logger.LogEvent(MigrateEvent{Kind: "prtb", Name: prtb.Name})
 			}
 		}
 		for _, ns := range p.Namespaces {
 			if !ns.Migrated {
-				fmt.Fprintf(w, "  - migrating Namespace [%s]... ", ns.Name)
 				ns.Mutate(tc.Obj.Name, ns.ProjectName)
 				if _, err := tc.Client.Namespace.Create(ns.Obj); err != nil {
+					logger.LogEvent(MigrateEvent{Kind: "namespace", Name: ns.Name, Err: err})
 					return err
 				}
-				fmt.Fprintf(w, "Done.\n")
+				logger.LogEvent(MigrateEvent{Kind: "namespace", Name: ns.Name})
 			}
 		}
 	}
 	for _, crtb := range c.ToMigrate.CRTBs {
 		if !crtb.Migrated {
-			fmt.Fprintf(w, "- migrating CRTB [%s]... ", crtb.Name)
 			// check if the user exists first in case of external rancher
 			userID := crtb.Obj.UserName
 			var user v3.User
 			if err := client.Users.Get(ctx, "", userID, &user, v1.GetOptions{}); err != nil {
 				if apierrors.IsNotFound(err) {
-					return errors.New("user " + userID + " does not exists, please migrate user first")
+					migrateErr := errors.New("user " + userID + " does not exists, please migrate user first")
+					logger.LogEvent(MigrateEvent{Kind: "crtb", Name: crtb.Name, Err: migrateErr})
+					return migrateErr
 				}
 			}
 
 			crtb.Mutate(tc)
 			if err := client.ClusterRoleTemplateBindings.Create(ctx, tc.Obj.Name, crtb.Obj, nil, v1.CreateOptions{}); err != nil {
+				logger.LogEvent(MigrateEvent{Kind: "crtb", Name: crtb.Name, Err: err})
 				return err
 			}
-			fmt.Fprintf(w, "Done.\n")
+			logger.LogEvent(MigrateEvent{Kind: "crtb", Name: crtb.Name})
 		}
 	}
 	// catalog repos
 	for _, repo := range c.ToMigrate.ClusterRepos {
 		if !repo.Migrated {
-			fmt.Fprintf(w, "- migrating catalog repo [%s]... ", repo.Name)
 			repo.Mutate()
 			if err := tc.Client.ClusterRepos.Create(ctx, tc.Obj.Name, repo.Obj, nil, v1.CreateOptions{}); err != nil {
+				logger.LogEvent(MigrateEvent{Kind: "clusterrepo", Name: repo.Name, Err: err})
 				return err
 			}
-			fmt.Fprintf(w, "Done.\n")
+			logger.LogEvent(MigrateEvent{Kind: "clusterrepo", Name: repo.Name})
 		}
 	}
 

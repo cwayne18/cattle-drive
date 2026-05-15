@@ -23,10 +23,10 @@ go.work
 # ci
 bin/
 
-# Debug
-__debug*
+# Compiled binary in the repo root (anchored with / to avoid ignoring
+# subdirectories like charts/cattle-drive/).
+/cattle-drive
 .vscode/
-cattle-drive
 dist/
 
 # tui log file

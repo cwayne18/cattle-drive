@@ -157,8 +157,10 @@ func migrate(clx *cli.Context) error {
 		return err
 	}
 	cmds.Spinner.Stop()
+	fmt.Printf("Migrating Objects from cluster [%s] to cluster [%s]:\n", source, target)
+	logger := &cluster.WriterLogger{W: os.Stdout}
 	if targetRancherClient != nil {
-		return sc.Migrate(ctx, targetRancherClient, tc, os.Stdout)
+		return sc.Migrate(ctx, targetRancherClient, tc, logger)
 	}
-	return sc.Migrate(ctx, cl, tc, os.Stdout)
+	return sc.Migrate(ctx, cl, tc, logger)
 }

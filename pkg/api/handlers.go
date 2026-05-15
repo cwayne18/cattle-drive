@@ -1,0 +1,447 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"rancherlabs/cattle-drive/pkg/client"
+	"rancherlabs/cattle-drive/pkg/cluster"
+	"strings"
+
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+)
+
+// maxBodyBytes is the maximum request-body size the API will read (1 MiB).
+// Oversized bodies are rejected with 413 before any parsing occurs.
+const maxBodyBytes = 1 << 20 // 1 MiB
+
+// writeJSON serialises v as JSON and writes it with the given status code.
+func writeJSON(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+// writeError writes a JSON error envelope.
+func writeError(w http.ResponseWriter, code int, msg string) {
+	writeJSON(w, code, ErrorResponse{Error: msg})
+}
+
+// handleClusters lists all non-local downstream clusters visible through the
+// kubeconfig passed as a JSON body.
+func handleClusters(w http.ResponseWriter, r *http.Request) {
+	handleClustersWithDefault("", w, r)
+}
+
+func handleClustersWithDefault(defaultKubeconfig string, w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	var req StatusRequest // reuse – only kubeconfig is needed
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+		return
+	}
+	kubeconfigPath, err := resolveKubeconfig(req.Kubeconfig, defaultKubeconfig)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "kubeconfig is required")
+		return
+	}
+
+	ctx := context.Background()
+	restCfg, err := buildRESTConfig(kubeconfigPath)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "failed to load kubeconfig: "+err.Error())
+		return
+	}
+	cl, err := client.New(ctx, restCfg)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create client: "+err.Error())
+		return
+	}
+
+	var list v3.ClusterList
+	if err := cl.Clusters.List(ctx, "", &list, v1.ListOptions{}); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list clusters: "+err.Error())
+		return
+	}
+
+	// Use an initialised (non-nil) slice so the response marshals as [] not null.
+	infos := []ClusterInfo{}
+	for _, c := range list.Items {
+		// skip local management cluster
+		if c.Name == "local" {
+			continue
+		}
+		infos = append(infos, ClusterInfo{
+			ID:          c.Name,
+			DisplayName: c.Spec.DisplayName,
+		})
+	}
+	writeJSON(w, http.StatusOK, ClustersResponse{Clusters: infos})
+}
+
+// handleStatus compares source and target cluster objects and returns their
+// migration status.
+func handleStatus(w http.ResponseWriter, r *http.Request) {
+	handleStatusWithDefault("", w, r)
+}
+
+func handleStatusWithDefault(defaultKubeconfig string, w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	var req StatusRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+		return
+	}
+	kubeconfigPath, err := resolveKubeconfig(req.Kubeconfig, defaultKubeconfig)
+	if err != nil || req.Source == "" || req.Target == "" {
+		writeError(w, http.StatusBadRequest, "kubeconfig, source and target are required")
+		return
+	}
+
+	ctx := context.Background()
+	sc, tc, cl, err := buildClusters(ctx, kubeconfigPath, req.TargetRancherConfig, req.Source, req.Target)
+	if err != nil {
+		var notFound *clusterNotFoundError
+		if errors.As(err, &notFound) {
+			writeError(w, http.StatusNotFound, err.Error())
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+
+	if err := sc.Populate(ctx, cl.source); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to populate source cluster: "+err.Error())
+		return
+	}
+	if err := tc.Populate(ctx, cl.target); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to populate target cluster: "+err.Error())
+		return
+	}
+	if err := sc.Compare(ctx, tc); err != nil {
+		writeError(w, http.StatusInternalServerError, "comparison failed: "+err.Error())
+		return
+	}
+
+	resp := buildStatusResponse(sc, tc)
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// handleMigrate runs the full migration and returns a structured log.
+func handleMigrate(w http.ResponseWriter, r *http.Request) {
+	handleMigrateWithDefault("", w, r)
+}
+
+func handleMigrateWithDefault(defaultKubeconfig string, w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	var req MigrateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+		return
+	}
+	kubeconfigPath, err := resolveKubeconfig(req.Kubeconfig, defaultKubeconfig)
+	if err != nil || req.Source == "" || req.Target == "" {
+		writeError(w, http.StatusBadRequest, "kubeconfig, source and target are required")
+		return
+	}
+
+	ctx := context.Background()
+	sc, tc, cl, err := buildClusters(ctx, kubeconfigPath, req.TargetRancherConfig, req.Source, req.Target)
+	if err != nil {
+		var notFound *clusterNotFoundError
+		if errors.As(err, &notFound) {
+			writeError(w, http.StatusNotFound, err.Error())
+		} else {
+			writeError(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+
+	if err := sc.Populate(ctx, cl.source); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to populate source cluster: "+err.Error())
+		return
+	}
+	if err := tc.Populate(ctx, cl.target); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to populate target cluster: "+err.Error())
+		return
+	}
+	if err := sc.Compare(ctx, tc); err != nil {
+		writeError(w, http.StatusInternalServerError, "comparison failed: "+err.Error())
+		return
+	}
+
+	logger := &sliceLogger{}
+	migrateErr := sc.Migrate(ctx, cl.target, tc, logger)
+
+	// Ensure the log field never marshals as null.
+	logEntries := logger.entries
+	if logEntries == nil {
+		logEntries = []MigrateLogEntry{}
+	}
+	resp := MigrateResponse{
+		Source:  req.Source,
+		Target:  req.Target,
+		Log:     logEntries,
+		Success: migrateErr == nil,
+	}
+	if migrateErr != nil {
+		resp.Error = migrateErr.Error()
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// clusterClients holds the source and target API clients.
+type clusterClients struct {
+	source *client.Clients
+	target *client.Clients
+}
+
+// newClientsFromReq builds source and (optionally separate) target Clients from
+// the kubeconfig paths supplied in the request.
+func newClientsFromReq(ctx context.Context, kubeconfigPath, targetKubeconfigPath string) (*clusterClients, error) {
+	restCfg, err := buildRESTConfig(kubeconfigPath)
+	if err != nil {
+		return nil, err
+	}
+	sourceCl, err := client.New(ctx, restCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	targetCl := sourceCl
+	if targetKubeconfigPath != "" {
+		targetRestCfg, err := buildRESTConfig(targetKubeconfigPath)
+		if err != nil {
+			return nil, err
+		}
+		targetCl, err = client.New(ctx, targetRestCfg)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &clusterClients{source: sourceCl, target: targetCl}, nil
+}
+
+// buildClusters constructs and populates the source and target Cluster objects
+// used for status/migrate operations.
+func buildClusters(ctx context.Context, kubeconfigPath, targetKubeconfigPath, sourceName, targetName string) (*cluster.Cluster, *cluster.Cluster, *clusterClients, error) {
+	cl, err := newClientsFromReq(ctx, kubeconfigPath, targetKubeconfigPath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	restCfg, err := buildRESTConfig(kubeconfigPath)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	var targetRestCfg *rest.Config
+	if targetKubeconfigPath != "" {
+		targetRestCfg, err = buildRESTConfig(targetKubeconfigPath)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
+
+	var clusterList v3.ClusterList
+	if err := cl.source.Clusters.List(ctx, "", &clusterList, v1.ListOptions{}); err != nil {
+		return nil, nil, nil, err
+	}
+
+	var sourceObj, targetObj *v3.Cluster
+	for _, c := range clusterList.Items {
+		if c.Spec.DisplayName == sourceName {
+			sourceObj = c.DeepCopy()
+		}
+		if targetKubeconfigPath == "" && c.Spec.DisplayName == targetName {
+			targetObj = c.DeepCopy()
+		}
+	}
+
+	if targetKubeconfigPath != "" {
+		var targetClusterList v3.ClusterList
+		if err := cl.target.Clusters.List(ctx, "", &targetClusterList, v1.ListOptions{}); err != nil {
+			return nil, nil, nil, err
+		}
+		for _, c := range targetClusterList.Items {
+			if c.Spec.DisplayName == targetName {
+				targetObj = c.DeepCopy()
+			}
+		}
+	}
+
+	if sourceObj == nil || targetObj == nil {
+		return nil, nil, nil, &clusterNotFoundError{source: sourceName, target: targetName, sourceFound: sourceObj != nil}
+	}
+
+	scCfg := *restCfg
+	scCfg.Host = restCfg.Host + "/k8s/clusters/" + sourceObj.Name
+	scClient, err := client.New(ctx, &scCfg)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	sc := &cluster.Cluster{Obj: sourceObj, Client: scClient}
+
+	tcBaseCfg := restCfg
+	if targetRestCfg != nil {
+		tcBaseCfg = targetRestCfg
+	}
+	tcCfg := *tcBaseCfg
+	tcCfg.Host = tcBaseCfg.Host + "/k8s/clusters/" + targetObj.Name
+	tcClient, err := client.New(ctx, &tcCfg)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	tc := &cluster.Cluster{Obj: targetObj, Client: tcClient}
+
+	if targetKubeconfigPath != "" {
+		sc.ExternalRancher = true
+		tc.ExternalRancher = true
+	}
+
+	return sc, tc, cl, nil
+}
+
+func resolveKubeconfig(reqKubeconfig, defaultKubeconfig string) (string, error) {
+	if reqKubeconfig != "" {
+		return reqKubeconfig, nil
+	}
+	if defaultKubeconfig != "" {
+		return defaultKubeconfig, nil
+	}
+	return "", errors.New("kubeconfig is required")
+}
+
+func buildRESTConfig(kubeconfigPath string) (*rest.Config, error) {
+	if isInClusterConfigValue(kubeconfigPath) {
+		return rest.InClusterConfig()
+	}
+	return clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+}
+
+// isInClusterConfigValue returns true for the documented "incluster" sentinel
+// as well as the hyphenated "in-cluster" variant for compatibility.
+func isInClusterConfigValue(kubeconfigPath string) bool {
+	switch strings.ToLower(strings.TrimSpace(kubeconfigPath)) {
+	case "incluster", "in-cluster":
+		return true
+	default:
+		return false
+	}
+}
+
+// buildStatusResponse converts a populated + compared source Cluster (sc) and its
+// target Cluster (tc) into a StatusResponse suitable for JSON serialisation.
+func buildStatusResponse(sc, tc *cluster.Cluster) StatusResponse {
+	resp := StatusResponse{
+		Source: sc.Obj.Spec.DisplayName,
+		Target: tc.Obj.Spec.DisplayName,
+		// Initialise slices so they marshal as [] rather than null.
+		Projects:     []ProjectStatus{},
+		CRTBs:        []ObjectStatus{},
+		ClusterRepos: []ObjectStatus{},
+	}
+
+	for _, p := range sc.ToMigrate.Projects {
+		ps := ProjectStatus{
+			ObjectStatus: ObjectStatus{
+				Name:     p.Name,
+				Type:     "project",
+				Migrated: p.Migrated,
+				Diff:     p.Diff,
+			},
+			PRTBs:      []ObjectStatus{},
+			Namespaces: []ObjectStatus{},
+		}
+		for _, prtb := range p.PRTBs {
+			ps.PRTBs = append(ps.PRTBs, ObjectStatus{
+				Name:        prtb.Name,
+				Type:        "prtb",
+				Migrated:    prtb.Migrated,
+				Diff:        prtb.Diff,
+				Description: prtb.Description,
+			})
+		}
+		for _, ns := range p.Namespaces {
+			ps.Namespaces = append(ps.Namespaces, ObjectStatus{
+				Name:     ns.Name,
+				Type:     "namespace",
+				Migrated: ns.Migrated,
+				Diff:     ns.Diff,
+			})
+		}
+		resp.Projects = append(resp.Projects, ps)
+	}
+
+	for _, crtb := range sc.ToMigrate.CRTBs {
+		resp.CRTBs = append(resp.CRTBs, ObjectStatus{
+			Name:        crtb.Name,
+			Type:        "crtb",
+			Migrated:    crtb.Migrated,
+			Diff:        crtb.Diff,
+			Description: crtb.Description,
+		})
+	}
+
+	for _, repo := range sc.ToMigrate.ClusterRepos {
+		resp.ClusterRepos = append(resp.ClusterRepos, ObjectStatus{
+			Name:     repo.Name,
+			Type:     "clusterrepo",
+			Migrated: repo.Migrated,
+			Diff:     repo.Diff,
+		})
+	}
+
+	return resp
+}
+
+// sliceLogger implements cluster.MigrateLogger and collects typed MigrateLogEntry
+// values. It replaces the old approach of capturing text output to a bytes.Buffer
+// and then splitting it by newlines.
+type sliceLogger struct {
+	entries []MigrateLogEntry
+}
+
+func (l *sliceLogger) LogEvent(e cluster.MigrateEvent) {
+	entry := MigrateLogEntry{
+		Message: fmt.Sprintf("migrated %s [%s]", e.Kind, e.Name),
+	}
+	if e.Err != nil {
+		entry.Message = fmt.Sprintf("error migrating %s [%s]: %v", e.Kind, e.Name, e.Err)
+		entry.Error = true
+	}
+	l.entries = append(l.entries, entry)
+}
+
+// clusterNotFoundError is returned when one or both clusters cannot be found.
+type clusterNotFoundError struct {
+	source, target string
+	sourceFound    bool
+}
+
+func (e *clusterNotFoundError) Error() string {
+	if !e.sourceFound {
+		return "source cluster '" + e.source + "' not found"
+	}
+	return "target cluster '" + e.target + "' not found"
+}

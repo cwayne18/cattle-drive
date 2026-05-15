@@ -1,0 +1,38 @@
+{{- /*
+UIPlugin CR — tells Rancher Dashboard to load the cattle-drive extension bundle.
+
+Set extension.endpoint to an unpacked plugin URL or extension.compressedEndpoint
+to a tar.gz bundle. If neither is set, the chart defaults compressedEndpoint to
+the GitHub Releases asset for the current chart appVersion.
+*/ -}}
+{{- $version := default .Chart.AppVersion .Values.extension.versionOverride -}}
+{{- $endpoint := .Values.extension.endpoint -}}
+{{- $compressedEndpoint := .Values.extension.compressedEndpoint -}}
+{{- if and (not $endpoint) (not $compressedEndpoint) -}}
+  {{- $compressedEndpoint = printf "https://github.com/cwayne18/cattle-drive/releases/download/v%s/cattle-drive-ui-extension-%s.tar.gz" $version $version -}}
+{{- end }}
+apiVersion: catalog.cattle.io/v1
+kind: UIPlugin
+metadata:
+  name: cattle-drive
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: cattle-drive
+    app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+    {{- with .Values.commonLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  plugin:
+    name: cattle-drive
+    version: {{ $version | quote }}
+    {{- if $endpoint }}
+    endpoint: {{ $endpoint | quote }}
+    {{- end }}
+    {{- if $compressedEndpoint }}
+    compressedEndpoint: {{ $compressedEndpoint | quote }}
+    {{- end }}
+    noCache: {{ .Values.extension.noCache }}
+    noAuth: {{ .Values.extension.noAuth }}
+    metadata:
+      {{- toYaml .Values.extension.metadata | nindent 6 }}

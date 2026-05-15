@@ -1,0 +1,61 @@
+{{- if .Values.serviceAccount.create }}
+---
+# ClusterRole granting the cattle-drive API server read/write access to the
+# Rancher management resources it needs to enumerate and migrate.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cattle-drive
+  labels:
+    app.kubernetes.io/name: cattle-drive
+    app.kubernetes.io/component: api-server
+    {{- with .Values.commonLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+rules:
+  # Rancher management clusters (read-only — we only enumerate, not create them)
+  - apiGroups: ["management.cattle.io"]
+    resources: ["clusters"]
+    verbs: ["get", "list", "watch"]
+
+  # Projects — read + create/update for migration
+  - apiGroups: ["management.cattle.io"]
+    resources: ["projects"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+  # Project and Cluster role template bindings
+  - apiGroups: ["management.cattle.io"]
+    resources:
+      - projectroletemplatebindings
+      - clusterroletemplatebindings
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+  # Namespaces (core API — projects own namespaces via annotations)
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+  # Catalog repos (Helm catalog repositories)
+  - apiGroups: ["catalog.cattle.io"]
+    resources: ["clusterrepos"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cattle-drive
+  labels:
+    app.kubernetes.io/name: cattle-drive
+    app.kubernetes.io/component: api-server
+    {{- with .Values.commonLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cattle-drive
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.serviceAccount.name }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

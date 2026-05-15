@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900">
+  <defs>
+    <style>
+      text { font-family: "Source Sans Pro", Arial, sans-serif; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1280" height="900" fill="#1b2a32"/>
+
+  <!-- Left sidebar -->
+  <rect x="0" y="0" width="220" height="900" fill="#18262e"/>
+  <rect x="0" y="0" width="220" height="56" fill="#0f1f27"/>
+  <text x="30" y="35" fill="#ffffff" font-size="18" font-weight="700">🐄 Rancher</text>
+  <rect x="0" y="56" width="220" height="1" fill="#2e4c5c"/>
+  <text x="18" y="90" fill="#8fa8b4" font-size="11" font-weight="600" letter-spacing="1">CATTLE DRIVE</text>
+  <text x="26" y="127" fill="#8fa8b4" font-size="13">📋 Dashboard</text>
+  <text x="26" y="163" fill="#8fa8b4" font-size="13">🔍 Migration Status</text>
+  <!-- Active: Migrate -->
+  <rect x="0" y="169" width="220" height="36" fill="#0d6e8e" opacity="0.4"/>
+  <rect x="0" y="169" width="3" height="36" fill="#2cb1e0"/>
+  <text x="26" y="191" fill="#ffffff" font-size="13">🚀 Run Migration</text>
+
+  <!-- Main content area -->
+  <rect x="220" y="0" width="1060" height="900" fill="#1e3342"/>
+  <rect x="220" y="0" width="1060" height="52" fill="#152533"/>
+  <text x="240" y="32" fill="#8fa8b4" font-size="13">Home / Cattle Drive / Run Migration</text>
+
+  <!-- Page header -->
+  <text x="310" y="90" fill="#8fa8b4" font-size="13">← Back</text>
+  <text x="354" y="90" fill="#ffffff" font-size="22" font-weight="600">Run Migration</text>
+  <line x1="240" y1="110" x2="1240" y2="110" stroke="#2e4c5c" stroke-width="1"/>
+
+  <!-- Cluster strip -->
+  <rect x="240" y="120" width="980" height="40" rx="4" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="260" y="145" fill="#8fa8b4" font-size="13">🖥  <tspan fill="#ffffff" font-weight="600">Source:</tspan> hussein-rke1</text>
+  <text x="450" y="145" fill="#2cb1e0" font-size="16">→</text>
+  <text x="478" y="145" fill="#8fa8b4" font-size="13">🖥  <tspan fill="#ffffff" font-weight="600">Target:</tspan> hgalal-rke2</text>
+
+  <!-- Info banner -->
+  <rect x="240" y="174" width="700" height="56" rx="4" fill="#0d3750" stroke="#1a6888" stroke-width="1"/>
+  <text x="260" y="196" fill="#8fa8b4" font-size="13">ℹ  This will migrate all non-default objects (Projects, PRTBs, CRTBs, Catalog Repos)</text>
+  <text x="260" y="214" fill="#8fa8b4" font-size="13">    from hussein-rke1 to hgalal-rke2. Existing objects will be skipped.</text>
+
+  <!-- Action buttons (pre-run state) -->
+  <rect x="830" y="185" width="170" height="36" rx="4" fill="none" stroke="#2cb1e0" stroke-width="1.5"/>
+  <text x="850" y="208" fill="#2cb1e0" font-size="13">☰ View Status First</text>
+  <rect x="1016" y="185" width="150" height="36" rx="4" fill="#0d6e8e"/>
+  <text x="1044" y="208" fill="#ffffff" font-size="13">↑ Start Migration</text>
+
+  <!-- Migration Progress Log -->
+  <rect x="240" y="246" width="980" height="36" rx="4" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="260" y="269" fill="#ffffff" font-size="14" font-weight="600">Migration Progress</text>
+  <text x="1060" y="269" fill="#27ae60" font-size="13">7 succeeded</text>
+  <text x="1140" y="269" fill="#e74c3c" font-size="13">1 failed</text>
+
+  <!-- Log entries -->
+  <!-- Entry 1 - success -->
+  <rect x="240" y="282" width="980" height="36" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="260" y="305" fill="#27ae60" font-size="14">✔</text>
+  <text x="282" y="305" fill="#8fa8b4" font-size="13">Loading source cluster objects…</text>
+  <text x="1160" y="305" fill="#8fa8b4" font-size="11">10:02:01</text>
+
+  <!-- Entry 2 - success -->
+  <rect x="240" y="318" width="980" height="36" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="260" y="341" fill="#27ae60" font-size="14">✔</text>
+  <text x="282" y="341" fill="#ffffff" font-size="13">Migrating project "migrate-project"…</text>
+  <text x="730" y="341" fill="#27ae60" font-size="12" font-style="italic">Done.</text>
+  <text x="1160" y="341" fill="#8fa8b4" font-size="11">10:02:02</text>
+
+  <!-- Entry 3 - success -->
+  <rect x="240" y="354" width="980" height="36" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="260" y="377" fill="#27ae60" font-size="14">✔</text>
+  <text x="282" y="377" fill="#ffffff" font-size="13">  Migrating PRTB "prtb-n8wqz"…</text>
+  <text x="660" y="377" fill="#27ae60" font-size="12" font-style="italic">Done.</text>
+  <text x="1160" y="377" fill="#8fa8b4" font-size="11">10:02:03</text>
+
+  <!-- Entry 4 - success (project already migrated / skip) -->
+  <rect x="240" y="390" width="980" height="36" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="260" y="413" fill="#27ae60" font-size="14">✔</text>
+  <text x="282" y="413" fill="#ffffff" font-size="13">Project "test-project"</text>
+  <text x="530" y="413" fill="#8fa8b4" font-size="12" font-style="italic">Already migrated — skipped.</text>
+  <text x="1160" y="413" fill="#8fa8b4" font-size="11">10:02:03</text>
+
+  <!-- Entry 5 - success -->
+  <rect x="240" y="426" width="980" height="36" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="260" y="449" fill="#27ae60" font-size="14">✔</text>
+  <text x="282" y="449" fill="#ffffff" font-size="13">Migrating CRTB "crtb-x8mq2"…</text>
+  <text x="668" y="449" fill="#27ae60" font-size="12" font-style="italic">Done.</text>
+  <text x="1160" y="449" fill="#8fa8b4" font-size="11">10:02:04</text>
+
+  <!-- Entry 6 - success -->
+  <rect x="240" y="462" width="980" height="36" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="260" y="485" fill="#27ae60" font-size="14">✔</text>
+  <text x="282" y="485" fill="#ffffff" font-size="13">Migrating CRTB "crtb-p7cpc"…</text>
+  <text x="668" y="485" fill="#8fa8b4" font-size="12" font-style="italic">Already migrated — skipped.</text>
+  <text x="1160" y="485" fill="#8fa8b4" font-size="11">10:02:04</text>
+
+  <!-- Entry 7 - error -->
+  <rect x="240" y="498" width="980" height="36" fill="#2e0d0d" stroke="#7a2c2c" stroke-width="1"/>
+  <text x="260" y="521" fill="#e74c3c" font-size="14">✗</text>
+  <text x="282" y="521" fill="#ffffff" font-size="13">Migrating catalog repo "internal-charts"…</text>
+  <text x="680" y="521" fill="#e74c3c" font-size="12" font-style="italic">user u-abc123 does not exist, please migrate user first</text>
+  <text x="1160" y="521" fill="#8fa8b4" font-size="11">10:02:05</text>
+
+  <!-- Entry 8 - success -->
+  <rect x="240" y="534" width="980" height="36" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="260" y="557" fill="#27ae60" font-size="14">✔</text>
+  <text x="282" y="557" fill="#ffffff" font-size="13">Migrating catalog repo "k3k"…</text>
+  <text x="610" y="557" fill="#27ae60" font-size="12" font-style="italic">Done.</text>
+  <text x="1160" y="557" fill="#8fa8b4" font-size="11">10:02:06</text>
+
+  <!-- Success result banner -->
+  <rect x="240" y="590" width="700" height="48" rx="4" fill="#0a2e1e" stroke="#2c7a50" stroke-width="1"/>
+  <text x="260" y="614" fill="#27ae60" font-size="13" font-weight="600">✔ Migration complete.</text>
+  <text x="260" y="632" fill="#27ae60" font-size="13">7 objects processed successfully, 1 failed.</text>
+
+  <!-- Result actions -->
+  <rect x="240" y="654" width="170" height="36" rx="4" fill="none" stroke="#2cb1e0" stroke-width="1.5"/>
+  <text x="262" y="677" fill="#2cb1e0" font-size="13">☰ View Status</text>
+  <rect x="426" y="654" width="130" height="36" rx="4" fill="#0d6e8e"/>
+  <text x="452" y="677" fill="#ffffff" font-size="13">⟳ Run Again</text>
+</svg>

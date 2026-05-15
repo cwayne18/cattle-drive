@@ -1,0 +1,52 @@
+# cattle-drive Helm chart values
+
+# -- UI extension bundle endpoint.
+# Set to the URL of the built extension .tar.gz for airgapped or custom registry deployments.
+# Defaults to the GitHub Releases URL for the current chart version.
+extension:
+  endpoint: ""
+  compressedEndpoint: ""
+  versionOverride: ""
+  noCache: false
+  noAuth: false
+  metadata:
+    displayName: Cattle Drive
+    description: Rancher UI extension for migrating Rancher objects between downstream clusters
+    source: https://github.com/cwayne18/cattle-drive
+
+# -- API server image configuration.
+image:
+  repository: ghcr.io/cwayne18/cattle-drive
+  tag: ""          # Defaults to .Chart.AppVersion when empty
+  pullPolicy: IfNotPresent
+
+# -- Number of API server replicas.
+replicaCount: 1
+
+# -- Resource requests/limits for the API server container.
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+# -- ServiceAccount settings.
+serviceAccount:
+  create: true
+  name: cattle-drive
+
+# -- Additional labels to apply to all resources.
+commonLabels: {}
+
+# -- Optional browser origins allowed to call the API directly. Leave empty to
+# require Rancher's same-origin proxy path.
+api:
+  corsAllowedOrigins: []
+
+# -- NetworkPolicy: restrict direct access to the API service.
+# When enabled, only pods in the release namespace that carry the
+# rancher pod label may reach the cattle-drive-api Service.
+networkPolicy:
+  enabled: true

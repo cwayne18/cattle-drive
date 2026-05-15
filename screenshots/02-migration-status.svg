@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900">
+  <defs>
+    <style>
+      text { font-family: "Source Sans Pro", Arial, sans-serif; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1280" height="900" fill="#1b2a32"/>
+
+  <!-- Left sidebar -->
+  <rect x="0" y="0" width="220" height="900" fill="#18262e"/>
+  <rect x="0" y="0" width="220" height="56" fill="#0f1f27"/>
+  <text x="30" y="35" fill="#ffffff" font-size="18" font-weight="700">🐄 Rancher</text>
+  <rect x="0" y="56" width="220" height="1" fill="#2e4c5c"/>
+  <text x="18" y="90" fill="#8fa8b4" font-size="11" font-weight="600" letter-spacing="1">CATTLE DRIVE</text>
+  <text x="26" y="127" fill="#8fa8b4" font-size="13">📋 Dashboard</text>
+  <!-- Active: Status -->
+  <rect x="0" y="133" width="220" height="36" fill="#0d6e8e" opacity="0.4"/>
+  <rect x="0" y="133" width="3" height="36" fill="#2cb1e0"/>
+  <text x="26" y="155" fill="#ffffff" font-size="13">🔍 Migration Status</text>
+  <text x="26" y="191" fill="#8fa8b4" font-size="13">🚀 Run Migration</text>
+
+  <!-- Main content area -->
+  <rect x="220" y="0" width="1060" height="900" fill="#1e3342"/>
+  <rect x="220" y="0" width="1060" height="52" fill="#152533"/>
+  <text x="240" y="32" fill="#8fa8b4" font-size="13">Home / Cattle Drive / Migration Status</text>
+
+  <!-- Page header -->
+  <text x="310" y="90" fill="#8fa8b4" font-size="13">← Back</text>
+  <text x="354" y="90" fill="#ffffff" font-size="22" font-weight="600">Migration Status</text>
+  <rect x="1030" y="68" width="100" height="34" rx="4" fill="none" stroke="#2cb1e0" stroke-width="1.5"/>
+  <text x="1054" y="90" fill="#2cb1e0" font-size="13">⟳ Refresh</text>
+  <rect x="1146" y="68" width="110" height="34" rx="4" fill="#0d6e8e"/>
+  <text x="1163" y="90" fill="#ffffff" font-size="13">↑ Migrate</text>
+  <line x1="240" y1="110" x2="1240" y2="110" stroke="#2e4c5c" stroke-width="1"/>
+
+  <!-- Cluster strip -->
+  <rect x="240" y="120" width="980" height="40" rx="4" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="260" y="145" fill="#8fa8b4" font-size="13">🖥  <tspan fill="#ffffff" font-weight="600">Source:</tspan> hussein-rke1</text>
+  <text x="450" y="145" fill="#2cb1e0" font-size="16">→</text>
+  <text x="478" y="145" fill="#8fa8b4" font-size="13">🖥  <tspan fill="#ffffff" font-weight="600">Target:</tspan> hgalal-rke2</text>
+
+  <!-- Summary badges -->
+  <rect x="240" y="175" width="230" height="70" rx="6" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="340" y="210" fill="#ffffff" font-size="28" font-weight="700" text-anchor="middle">8</text>
+  <text x="340" y="232" fill="#8fa8b4" font-size="11" text-anchor="middle" letter-spacing="1">TOTAL OBJECTS</text>
+
+  <rect x="486" y="175" width="230" height="70" rx="6" fill="#0a2e1e" stroke="#2c7a50" stroke-width="1"/>
+  <text x="586" y="210" fill="#27ae60" font-size="28" font-weight="700" text-anchor="middle">5</text>
+  <text x="586" y="232" fill="#27ae60" font-size="11" text-anchor="middle" letter-spacing="1">MIGRATED</text>
+
+  <rect x="732" y="175" width="230" height="70" rx="6" fill="#2e0d0d" stroke="#7a2c2c" stroke-width="1"/>
+  <text x="832" y="210" fill="#e74c3c" font-size="28" font-weight="700" text-anchor="middle">2</text>
+  <text x="832" y="232" fill="#e74c3c" font-size="11" text-anchor="middle" letter-spacing="1">NOT MIGRATED</text>
+
+  <rect x="978" y="175" width="242" height="70" rx="6" fill="#2e1e0d" stroke="#7a5c2c" stroke-width="1"/>
+  <text x="1094" y="210" fill="#e67e22" font-size="28" font-weight="700" text-anchor="middle">1</text>
+  <text x="1094" y="232" fill="#e67e22" font-size="11" text-anchor="middle" letter-spacing="1">DRIFT DETECTED</text>
+
+  <!-- Projects section -->
+  <rect x="240" y="262" width="980" height="36" rx="6" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="260" y="285" fill="#ffffff" font-size="14" font-weight="600">📁 Projects  <tspan fill="#8fa8b4" font-weight="400">(3)</tspan></text>
+
+  <!-- Project row 1 - migrated -->
+  <rect x="240" y="298" width="980" height="38" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="276" y="322" fill="#ffffff" font-size="13">test-project</text>
+  <rect x="1100" y="308" width="94" height="20" rx="10" fill="#0a2e1e"/>
+  <text x="1115" y="322" fill="#27ae60" font-size="11" font-weight="600">✔ MIGRATED</text>
+
+  <!-- Project row 2 - not migrated -->
+  <rect x="240" y="336" width="980" height="38" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="276" y="360" fill="#ffffff" font-size="13">migrate-project</text>
+  <rect x="1062" y="346" width="132" height="20" rx="10" fill="#2e0d0d"/>
+  <text x="1075" y="360" fill="#e74c3c" font-size="11" font-weight="600">✗ NOT MIGRATED</text>
+
+  <!-- Project row 3 - drift -->
+  <rect x="240" y="374" width="980" height="38" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="276" y="398" fill="#ffffff" font-size="13">staging-project</text>
+  <rect x="1074" y="384" width="120" height="20" rx="10" fill="#2e1e0d"/>
+  <text x="1087" y="398" fill="#e67e22" font-size="11" font-weight="600">⚠ DRIFT DETECTED</text>
+
+  <!-- PRTB nested rows under test-project (indented) -->
+  <rect x="264" y="412" width="956" height="32" fill="#152533" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="290" y="432" fill="#8fa8b4" font-size="12">  👤 prtb-kds2g: cluster-owner for alice</text>
+  <rect x="1100" y="420" width="94" height="18" rx="9" fill="#0a2e1e"/>
+  <text x="1115" y="432" fill="#27ae60" font-size="11" font-weight="600">✔ MIGRATED</text>
+
+  <!-- Cluster Role Bindings section -->
+  <rect x="240" y="460" width="980" height="36" rx="6" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="260" y="483" fill="#ffffff" font-size="14" font-weight="600">👤 Cluster Role Bindings  <tspan fill="#8fa8b4" font-weight="400">(3)</tspan></text>
+
+  <rect x="240" y="496" width="980" height="38" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="276" y="520" fill="#ffffff" font-size="13">crtb-p7cpc: cluster-member for bob</text>
+  <rect x="1100" y="506" width="94" height="20" rx="10" fill="#0a2e1e"/>
+  <text x="1115" y="520" fill="#27ae60" font-size="11" font-weight="600">✔ MIGRATED</text>
+
+  <rect x="240" y="534" width="980" height="38" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="276" y="558" fill="#ffffff" font-size="13">crtb-v9ls4: cluster-owner for charlie</text>
+  <rect x="1100" y="544" width="94" height="20" rx="10" fill="#0a2e1e"/>
+  <text x="1115" y="558" fill="#27ae60" font-size="11" font-weight="600">✔ MIGRATED</text>
+
+  <rect x="240" y="572" width="980" height="38" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="276" y="596" fill="#ffffff" font-size="13">crtb-x8mq2: cluster-member for diana</text>
+  <rect x="1062" y="582" width="132" height="20" rx="10" fill="#2e0d0d"/>
+  <text x="1075" y="596" fill="#e74c3c" font-size="11" font-weight="600">✗ NOT MIGRATED</text>
+
+  <!-- Catalog Repos section -->
+  <rect x="240" y="626" width="980" height="36" rx="6" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="260" y="649" fill="#ffffff" font-size="14" font-weight="600">📦 Catalog Repos  <tspan fill="#8fa8b4" font-weight="400">(2)</tspan></text>
+
+  <rect x="240" y="662" width="980" height="38" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="276" y="686" fill="#ffffff" font-size="13">k3k</text>
+  <rect x="1100" y="672" width="94" height="20" rx="10" fill="#0a2e1e"/>
+  <text x="1115" y="686" fill="#27ae60" font-size="11" font-weight="600">✔ MIGRATED</text>
+
+  <rect x="240" y="700" width="980" height="38" fill="#162838" stroke="#2e4c5c" stroke-width="1"/>
+  <text x="276" y="724" fill="#ffffff" font-size="13">bitnami</text>
+  <rect x="1100" y="710" width="94" height="20" rx="10" fill="#0a2e1e"/>
+  <text x="1115" y="724" fill="#27ae60" font-size="11" font-weight="600">✔ MIGRATED</text>
+</svg>
