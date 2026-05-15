@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"strings"
 )
@@ -65,7 +66,8 @@ func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 // bearerAuth returns middleware that enforces "Authorization: Bearer <token>"
 // on every request. Pre-flight OPTIONS requests bypass the check so that CORS
-// works correctly from browser clients.
+// works correctly from browser clients. The comparison is performed in constant
+// time to prevent timing-based token oracle attacks.
 func bearerAuth(token string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Let CORS pre-flights through – the browser sends these without auth.
@@ -73,9 +75,15 @@ func bearerAuth(token string, next http.HandlerFunc) http.HandlerFunc {
 			next(w, r)
 			return
 		}
-		auth := r.Header.Get("Authorization")
 		const prefix = "Bearer "
-		if !strings.HasPrefix(auth, prefix) || auth[len(prefix):] != token {
+		auth := r.Header.Get("Authorization")
+		// Extract only the token portion after confirming the prefix is present.
+		var provided string
+		if strings.HasPrefix(auth, prefix) {
+			provided = auth[len(prefix):]
+		}
+		// Constant-time comparison prevents timing-based token-oracle attacks.
+		if subtle.ConstantTimeCompare([]byte(provided), []byte(token)) != 1 {
 			writeError(w, http.StatusUnauthorized, "unauthorized: missing or invalid token")
 			return
 		}
