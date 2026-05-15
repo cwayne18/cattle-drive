@@ -147,6 +147,16 @@ export default {
       return STATUS.MIGRATED;
     },
 
+    childIcon(type) {
+      const icons = {
+        namespace: 'folder',
+        prtb:      'user',
+        crtb:      'user',
+        repo:      'catalog',
+      };
+      return icons[type] || 'list-flat';
+    },
+
     statusLabel(item) {
       switch (this.itemStatus(item)) {
       case STATUS.MIGRATED:     return 'Migrated';
@@ -304,7 +314,7 @@ export default {
             >
               <div class="status-item__row">
                 <span class="status-item__name">
-                  <i :class="`icon icon-${ child.type === 'namespace' ? 'folder' : 'user' } mr-5`" />
+                  <i :class="`icon icon-${ childIcon(child.type) } mr-5`" />
                   {{ child.label }}
                 </span>
                 <span :class="`badge badge--${ statusColor(child) }`">

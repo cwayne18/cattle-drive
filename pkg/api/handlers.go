@@ -165,11 +165,19 @@ func handleMigrate(w http.ResponseWriter, r *http.Request) {
 	migrateClient := cl.target
 	migrateErr := sc.Migrate(ctx, migrateClient, tc, &buf)
 
-	log := parseLog(buf.String())
+	logEntries := parseLog(buf.String())
+	// If the migration ended with an error, append it as a final error log entry
+	// so the UI can display and count it alongside the progress lines.
+	if migrateErr != nil {
+		logEntries = append(logEntries, MigrateLogEntry{
+			Message: "Error: " + migrateErr.Error(),
+			Error:   true,
+		})
+	}
 	resp := MigrateResponse{
 		Source:  req.Source,
 		Target:  req.Target,
-		Log:     log,
+		Log:     logEntries,
 		Success: migrateErr == nil,
 	}
 	if migrateErr != nil {

@@ -19,6 +19,8 @@ export default {
 
   computed: {
     clusterOptions() {
+      // Use displayName as the value: the cattle-drive API matches source/target
+      // by display name (same convention as the CLI -s / -t flags).
       return (this.allClusters || []).map(c => ({
         label: c.displayName || c.id,
         value: c.displayName,
