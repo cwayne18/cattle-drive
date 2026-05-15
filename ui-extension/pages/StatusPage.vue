@@ -1,6 +1,7 @@
 <script>
 import { PRODUCT_NAME, PAGES } from '../product';
 import { DEFAULT_PROXY_API_BASE, authHeaders } from '../utils/api';
+import { loadNavState, saveNavState } from '../utils/session-store';
 
 const STATUS = {
   MIGRATED:     'migrated',
@@ -12,11 +13,14 @@ export default {
   name: 'CattleDriveStatus',
 
   async fetch() {
-    const q = this.$route.query;
-    this.sourceId      = q.source     || '';
-    this.targetId      = q.target     || '';
-    this.apiBase       = q.apiBase    || DEFAULT_PROXY_API_BASE;
-    this.kubeconfigPath = q.kubeconfig || '';
+    // Load state from sessionStorage (set by DashboardPage.goToStatus).
+    // Avoid reading from $route.query so sensitive values stay out of the URL.
+    const nav = loadNavState();
+
+    this.sourceId       = nav?.source     || '';
+    this.targetId       = nav?.target     || '';
+    this.apiBase        = nav?.apiBase    || DEFAULT_PROXY_API_BASE;
+    this.kubeconfigPath = nav?.kubeconfig || '';
 
     if (this.sourceId && this.targetId) {
       await this.loadStatus();
@@ -80,10 +84,10 @@ export default {
           body.kubeconfig = this.kubeconfigPath;
         }
         const res = await fetch(`${ this.apiBase }/api/status`, {
-          method:  'POST',
+          method:      'POST',
           credentials: 'same-origin',
-          headers: authHeaders(this.$store),
-          body:    JSON.stringify(body),
+          headers:     authHeaders(this.$store, this.apiBase),
+          body:        JSON.stringify(body),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -188,14 +192,15 @@ export default {
     },
 
     goToMigrate() {
+      // Re-persist current state so MigratePage can read it.
+      saveNavState({
+        source:     this.sourceId,
+        target:     this.targetId,
+        apiBase:    this.apiBase,
+        kubeconfig: this.kubeconfigPath,
+      });
       this.$router.push({
         name:   `${ PRODUCT_NAME }-c-cluster-${ PAGES.MIGRATE }`,
-        query:  {
-          source:     this.sourceId,
-          target:     this.targetId,
-          apiBase:    this.apiBase,
-          kubeconfig: this.kubeconfigPath,
-        },
         params: { product: PRODUCT_NAME, cluster: '_' },
       });
     },

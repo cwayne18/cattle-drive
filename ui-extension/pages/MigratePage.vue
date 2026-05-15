@@ -1,9 +1,11 @@
 <script>
 import { PRODUCT_NAME, PAGES } from '../product';
 import { DEFAULT_PROXY_API_BASE, authHeaders } from '../utils/api';
+import { loadNavState, saveNavState } from '../utils/session-store';
 
 const STEP = {
   IDLE:    'idle',
+  CONFIRM: 'confirm',
   RUNNING: 'running',
   SUCCESS: 'success',
   ERROR:   'error',
@@ -13,11 +15,14 @@ export default {
   name: 'CattleDriveMigrate',
 
   async fetch() {
-    const q = this.$route.query;
-    this.sourceId       = q.source     || '';
-    this.targetId       = q.target     || '';
-    this.apiBase        = q.apiBase    || DEFAULT_PROXY_API_BASE;
-    this.kubeconfigPath = q.kubeconfig || '';
+    // Load state from sessionStorage (set by DashboardPage or StatusPage).
+    // Sensitive values (apiBase, kubeconfig) are never read from the URL.
+    const nav = loadNavState();
+
+    this.sourceId       = nav?.source     || '';
+    this.targetId       = nav?.target     || '';
+    this.apiBase        = nav?.apiBase    || DEFAULT_PROXY_API_BASE;
+    this.kubeconfigPath = nav?.kubeconfig || '';
   },
 
   data() {
@@ -33,12 +38,16 @@ export default {
   },
 
   computed: {
-    isRunning() {
-      return this.overallStatus === STEP.RUNNING;
-    },
-
     isIdle() {
       return this.overallStatus === STEP.IDLE;
+    },
+
+    isConfirming() {
+      return this.overallStatus === STEP.CONFIRM;
+    },
+
+    isRunning() {
+      return this.overallStatus === STEP.RUNNING;
     },
 
     isDone() {
@@ -63,16 +72,25 @@ export default {
     },
 
     goToStatus() {
+      saveNavState({
+        source:     this.sourceId,
+        target:     this.targetId,
+        apiBase:    this.apiBase,
+        kubeconfig: this.kubeconfigPath,
+      });
       this.$router.push({
         name:   `${ PRODUCT_NAME }-c-cluster-${ PAGES.STATUS }`,
-        query:  {
-          source:     this.sourceId,
-          target:     this.targetId,
-          apiBase:    this.apiBase,
-          kubeconfig: this.kubeconfigPath,
-        },
         params: { product: PRODUCT_NAME, cluster: '_' },
       });
+    },
+
+    // Show the inline confirmation panel instead of firing immediately.
+    requestMigration() {
+      this.overallStatus = STEP.CONFIRM;
+    },
+
+    cancelMigration() {
+      this.overallStatus = STEP.IDLE;
     },
 
     async runMigration() {
@@ -89,10 +107,10 @@ export default {
           body.kubeconfig = this.kubeconfigPath;
         }
         const res = await fetch(`${ this.apiBase }/api/migrate`, {
-          method:  'POST',
+          method:      'POST',
           credentials: 'same-origin',
-          headers: authHeaders(this.$store),
-          body:    JSON.stringify(body),
+          headers:     authHeaders(this.$store, this.apiBase),
+          body:        JSON.stringify(body),
         });
 
         const data = await res.json();
@@ -111,8 +129,6 @@ export default {
       }
 
       // Scroll log to the bottom so the user sees the final entry.
-      // This is useful both for seeing the last "Done" on success and
-      // for seeing the error entry at the end of a failed migration.
       this.$nextTick(() => {
         const body = this.$el.querySelector('.migration-log__body');
         if (body) {
@@ -180,8 +196,34 @@ export default {
           <button class="btn role-secondary mr-10" @click="goToStatus">
             <i class="icon icon-list-flat" /> View Status First
           </button>
-          <button class="btn role-primary" @click="runMigration">
+          <button class="btn role-primary" @click="requestMigration">
             <i class="icon icon-upload" /> Start Migration
+          </button>
+        </div>
+      </div>
+
+      <!-- Confirmation dialog -->
+      <div v-if="isConfirming" class="confirm-panel mt-20">
+        <div class="confirm-panel__body">
+          <i class="icon icon-warning confirm-panel__icon" />
+          <div class="confirm-panel__text">
+            <h3>Confirm Migration</h3>
+            <p>
+              You are about to migrate all non-default objects from
+              <strong>{{ sourceId }}</strong> to <strong>{{ targetId }}</strong>.
+            </p>
+            <p class="confirm-panel__warning">
+              This operation creates and may overwrite Rancher objects on the target cluster.
+              It cannot be undone from within this tool.
+            </p>
+          </div>
+        </div>
+        <div class="confirm-panel__actions">
+          <button class="btn role-secondary mr-10" @click="cancelMigration">
+            <i class="icon icon-close" /> Cancel
+          </button>
+          <button class="btn role-danger" @click="runMigration">
+            <i class="icon icon-upload" /> Confirm &amp; Migrate
           </button>
         </div>
       </div>
@@ -232,7 +274,7 @@ export default {
           <button class="btn role-secondary mr-10" @click="goToStatus">
             <i class="icon icon-list-flat" /> View Status
           </button>
-          <button class="btn role-primary" @click="runMigration">
+          <button class="btn role-primary" @click="requestMigration">
             <i class="icon icon-refresh" /> Run Again
           </button>
         </div>
@@ -287,6 +329,53 @@ export default {
 
   .preflight {
     max-width: 680px;
+  }
+
+  .confirm-panel {
+    max-width: 680px;
+    border: 2px solid var(--warning);
+    border-radius: var(--border-radius);
+    padding: 20px;
+    background: var(--warning-banner-bg);
+
+    &__body {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    &__icon {
+      font-size: 32px;
+      color: var(--warning);
+      flex: 0 0 auto;
+      margin-top: 2px;
+    }
+
+    &__text {
+      h3 {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0 0 8px;
+        color: var(--body-text);
+      }
+
+      p {
+        font-size: 14px;
+        color: var(--body-text);
+        margin: 0 0 6px;
+      }
+    }
+
+    &__warning {
+      font-weight: 600;
+      color: var(--warning) !important;
+    }
+
+    &__actions {
+      display: flex;
+      justify-content: flex-end;
+    }
   }
 
   .running-indicator {

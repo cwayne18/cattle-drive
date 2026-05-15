@@ -1,0 +1,7 @@
+cattleDrive:
+  nav:
+    dashboard: Dashboard
+    status: Migration Status
+    migrate: Run Migration
+  product:
+    label: Cattle Drive

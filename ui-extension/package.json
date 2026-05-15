@@ -12,12 +12,16 @@
   },
   "scripts": {
     "dev": "./node_modules/.bin/nuxt dev",
-    "nuxt": "./node_modules/.bin/nuxt"
+    "nuxt": "./node_modules/.bin/nuxt",
+    "build-pkg": "shell-pkg build",
+    "publish-pkg": "shell-pkg publish",
+    "type-check": "tsc --noEmit"
   },
   "engines": {
     "node": ">=16"
   },
   "devDependencies": {
+    "@rancher/shell": "~0.8.0",
     "@vue/cli-plugin-babel": "~5.0.0",
     "@vue/cli-service": "~5.0.0",
     "@vue/cli-plugin-typescript": "~5.0.0"
