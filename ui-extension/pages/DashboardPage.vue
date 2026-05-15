@@ -1,49 +1,73 @@
 <script>
-import { mapGetters } from 'vuex';
 import { PRODUCT_NAME, PAGES } from '../product';
-
-// Rancher management API resource type for clusters
-const MGMT_CLUSTER = 'management.cattle.io.cluster';
 
 export default {
   name: 'CattleDriveDashboard',
 
-  async fetch() {
-    // Load all downstream clusters from the management store
-    this.allClusters = await this.$store.dispatch('management/findAll', { type: MGMT_CLUSTER });
-  },
-
   data() {
     return {
-      allClusters:    [],
-      sourceCluster:  null,
-      targetCluster:  null,
+      // cattle-drive API server base URL (configurable via settings)
+      apiBase:       'http://localhost:8080',
+      kubeconfigPath: '',
+      allClusters:   [],
+      sourceCluster: null,
+      targetCluster: null,
+      loadingClusters: false,
+      loadError:     null,
     };
   },
 
   computed: {
-    ...mapGetters({ t: 'i18n/t' }),
-
     clusterOptions() {
-      return (this.allClusters || [])
-        // Exclude the local management cluster itself
-        .filter(c => c.id !== 'local')
-        .map(c => ({
-          label: c.spec?.displayName || c.id,
-          value: c.id,
-        }));
+      return (this.allClusters || []).map(c => ({
+        label: c.displayName || c.id,
+        value: c.displayName,
+      }));
+    },
+
+    canFetch() {
+      return this.apiBase && this.kubeconfigPath;
     },
 
     canContinue() {
-      return this.sourceCluster && this.targetCluster && this.sourceCluster !== this.targetCluster;
+      return this.sourceCluster &&
+        this.targetCluster &&
+        this.sourceCluster !== this.targetCluster;
     },
   },
 
   methods: {
+    async fetchClusters() {
+      if (!this.canFetch) return;
+      this.loadingClusters = true;
+      this.loadError = null;
+      try {
+        const res = await fetch(`${ this.apiBase }/api/clusters`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ kubeconfig: this.kubeconfigPath }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || `HTTP ${ res.status }`);
+        }
+        this.allClusters = data.clusters || [];
+      } catch (err) {
+        this.loadError = err.message || String(err);
+      } finally {
+        this.loadingClusters = false;
+      }
+    },
+
     goToStatus() {
       this.$router.push({
         name:   `${ PRODUCT_NAME }-c-cluster-${ PAGES.STATUS }`,
-        query:  { source: this.sourceCluster, target: this.targetCluster },
+        query:  {
+          source:     this.sourceCluster,
+          target:     this.targetCluster,
+          apiBase:    this.apiBase,
+          kubeconfig: this.kubeconfigPath,
+        },
         params: { product: PRODUCT_NAME, cluster: '_' },
       });
     },
@@ -51,7 +75,12 @@ export default {
     goToMigrate() {
       this.$router.push({
         name:   `${ PRODUCT_NAME }-c-cluster-${ PAGES.MIGRATE }`,
-        query:  { source: this.sourceCluster, target: this.targetCluster },
+        query:  {
+          source:     this.sourceCluster,
+          target:     this.targetCluster,
+          apiBase:    this.apiBase,
+          kubeconfig: this.kubeconfigPath,
+        },
         params: { product: PRODUCT_NAME, cluster: '_' },
       });
     },
@@ -72,6 +101,41 @@ export default {
       </p>
     </div>
 
+    <!-- Connection settings -->
+    <div class="card-container mt-20">
+      <div class="card-title">
+        Connection Settings
+      </div>
+      <div class="connection-row">
+        <div class="connection-row__field">
+          <LabeledInput
+            v-model="apiBase"
+            label="cattle-drive API Server URL"
+            placeholder="http://localhost:8080"
+          />
+        </div>
+        <div class="connection-row__field">
+          <LabeledInput
+            v-model="kubeconfigPath"
+            label="Kubeconfig Path (server-side)"
+            placeholder="/path/to/kubeconfig.yaml"
+          />
+        </div>
+        <div class="connection-row__action">
+          <button
+            class="btn role-secondary"
+            :disabled="!canFetch || loadingClusters"
+            @click="fetchClusters"
+          >
+            <i :class="loadingClusters ? 'icon icon-spinner icon--spin' : 'icon icon-refresh'" />
+            Load Clusters
+          </button>
+        </div>
+      </div>
+      <Banner v-if="loadError" color="error" :label="loadError" class="mt-10" />
+    </div>
+
+    <!-- Cluster Picker -->
     <div class="cluster-picker card-container mt-20">
       <div class="card-title">
         Select Clusters
@@ -82,6 +146,7 @@ export default {
             v-model="sourceCluster"
             label="Source Cluster"
             :options="clusterOptions"
+            :disabled="allClusters.length === 0"
             placeholder="Select source cluster..."
           />
         </div>
@@ -95,6 +160,7 @@ export default {
             v-model="targetCluster"
             label="Target Cluster"
             :options="clusterOptions"
+            :disabled="allClusters.length === 0"
             placeholder="Select target cluster..."
           />
         </div>
@@ -127,7 +193,7 @@ export default {
     <div class="feature-grid mt-30">
       <div class="feature-card">
         <i class="icon icon-folder feature-card__icon" />
-        <h3>Projects & Namespaces</h3>
+        <h3>Projects &amp; Namespaces</h3>
         <p>Migrate custom projects and their namespaces, preserving resource quota configurations.</p>
       </div>
       <div class="feature-card">
@@ -186,6 +252,15 @@ export default {
     }
   }
 
+  .connection-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 15px;
+
+    &__field { flex: 1; }
+    &__action { flex: 0 0 auto; padding-bottom: 2px; }
+  }
+
   .cluster-picker {
     &__row {
       display: flex;
@@ -193,9 +268,7 @@ export default {
       gap: 15px;
     }
 
-    &__field {
-      flex: 1;
-    }
+    &__field { flex: 1; }
 
     &__arrow {
       color: var(--primary);

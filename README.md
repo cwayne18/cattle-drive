@@ -57,18 +57,60 @@ The interactive subcommands allows you to navigate in a simple list menu through
 
 The `ui-extension/` directory contains a [Rancher Dashboard UI Extension](https://github.com/rancher/ui-plugin-examples)
 that surfaces the same functionality as the CLI tool directly inside the Rancher Manager web UI.
+The extension communicates with a running **cattle-drive API server** (see below) rather than
+calling Rancher APIs directly.
+
+### API Server
+
+Before using the UI extension you must start the cattle-drive HTTP API server on a host that can
+reach the Rancher local cluster:
+
+```sh
+cattle-drive serve --listen 0.0.0.0:8080
+```
+
+This starts a lightweight HTTP server exposing three endpoints:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/clusters` | List downstream clusters for a given kubeconfig |
+| `POST` | `/api/status` | Compare source/target cluster objects, return migration status |
+| `POST` | `/api/migrate` | Run full migration, return structured log |
+| `GET`  | `/healthz` | Health check |
+
+All endpoints accept and return JSON. Every request body must include a server-side
+`kubeconfig` path that the **cattle-drive** process can read. Example:
+
+```sh
+# List clusters
+curl -s -X POST http://localhost:8080/api/clusters \
+  -H 'Content-Type: application/json' \
+  -d '{"kubeconfig":"/path/to/kubeconfig.yaml"}' | jq .
+
+# Get migration status
+curl -s -X POST http://localhost:8080/api/status \
+  -H 'Content-Type: application/json' \
+  -d '{"kubeconfig":"/path/to/kubeconfig.yaml","source":"hussein-rke1","target":"hgalal-rke2"}' | jq .
+
+# Run migration
+curl -s -X POST http://localhost:8080/api/migrate \
+  -H 'Content-Type: application/json' \
+  -d '{"kubeconfig":"/path/to/kubeconfig.yaml","source":"hussein-rke1","target":"hgalal-rke2"}' | jq .
+```
+
+Cross-origin requests from the Rancher Dashboard are permitted via CORS headers.
 
 ### Pages
 
 | Page | Description |
 |------|-------------|
-| **Dashboard** | Cluster picker — select source and target clusters, then navigate to Status or Migrate |
+| **Dashboard** | Connection settings (API URL + kubeconfig path), cluster picker, then navigate to Status or Migrate |
 | **Migration Status** | Tree view of all migratable objects with per-object status badges (Migrated / Not Migrated / Drift Detected) and summary counters |
-| **Run Migration** | Executes the migration with a live scrolling log showing success/failure for every object |
+| **Run Migration** | Calls `POST /api/migrate` and renders the structured log |
 
 ### Screenshots
 
-#### Dashboard — Cluster Picker
+#### Dashboard — Connection Settings & Cluster Picker
 
 ![Dashboard](screenshots/01-dashboard.svg)
 
@@ -93,20 +135,25 @@ ui-extension/
 ├── routing/
 │   └── extension-routing.js        # Vue Router routes
 └── pages/
-    ├── DashboardPage.vue            # Cluster picker & feature overview
-    ├── StatusPage.vue               # Migration status tree view
-    └── MigratePage.vue             # Migration runner with live log
+    ├── DashboardPage.vue            # Connection settings, cluster picker & feature overview
+    ├── StatusPage.vue               # Migration status tree view (calls /api/status)
+    └── MigratePage.vue             # Migration runner with log (calls /api/migrate)
 ```
 
 ### Installing the extension
 
-1. In Rancher Manager, go to the **local** cluster → **Apps** → **Repositories**.
-2. Click **Create** and add this repository as a Git-based Helm repository.
-3. Open the **Extensions** page and install the **cattle-drive** extension.
+1. Start the cattle-drive API server on a reachable host: `cattle-drive serve`
+2. In Rancher Manager, go to the **local** cluster → **Apps** → **Repositories**.
+3. Click **Create** and add this repository as a Git-based Helm repository.
+4. Open the **Extensions** page and install the **cattle-drive** extension.
+5. In the extension **Dashboard**, set the API server URL and the server-side kubeconfig path.
 
 ### Developing locally
 
 ```sh
+# Start the API server
+cattle-drive serve --listen 0.0.0.0:8080
+
 # From the rancher/dashboard repo root, with this repo checked out alongside it:
 yarn install --frozen-lockfile
 API=https://<your-rancher-host> yarn dev

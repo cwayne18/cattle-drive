@@ -1,24 +1,7 @@
 <script>
-import { mapGetters } from 'vuex';
 import { PRODUCT_NAME, PAGES } from '../product';
 
-const MGMT_CLUSTER   = 'management.cattle.io.cluster';
-const MGMT_PROJECT   = 'management.cattle.io.project';
-const MGMT_PRTB      = 'management.cattle.io.projectroletemplatebinding';
-const MGMT_CRTB      = 'management.cattle.io.clusterroletemplatebinding';
-const CATALOG_REPO   = 'catalog.cattle.io.clusterrepo';
-
-// Projects excluded from migration (Rancher defaults)
-const SKIP_PROJECTS  = ['Default', 'System'];
-
-// CRTBs excluded from migration (Rancher defaults)
-const SKIP_CRTB_NAMES   = ['creator-cluster-owner'];
-const SKIP_CRTB_PREFIXES = ['fleet-default-owner'];
-
-// Repos excluded from migration (Rancher defaults)
-const SKIP_REPO_PREFIX = 'rancher-';
-
-export const STATUS = {
+const STATUS = {
   MIGRATED:     'migrated',
   NOT_MIGRATED: 'not-migrated',
   DIFF:         'diff',
@@ -28,63 +11,57 @@ export default {
   name: 'CattleDriveStatus',
 
   async fetch() {
-    const source = this.$route.query.source;
-    const target = this.$route.query.target;
+    const q = this.$route.query;
+    this.sourceId      = q.source     || '';
+    this.targetId      = q.target     || '';
+    this.apiBase       = q.apiBase    || 'http://localhost:8080';
+    this.kubeconfigPath = q.kubeconfig || '';
 
-    if (!source || !target) {
-      return;
+    if (this.sourceId && this.targetId && this.kubeconfigPath) {
+      await this.loadStatus();
     }
-
-    this.sourceId = source;
-    this.targetId = target;
-
-    const allClusters = await this.$store.dispatch('management/findAll', { type: MGMT_CLUSTER });
-    this.sourceCluster = allClusters.find(c => c.id === source);
-    this.targetCluster = allClusters.find(c => c.id === target);
-
-    if (!this.sourceCluster || !this.targetCluster) {
-      this.fetchError = 'Could not find one or both clusters.';
-      return;
-    }
-
-    await this.loadStatus();
   },
 
   data() {
     return {
-      sourceId:      '',
-      targetId:      '',
-      sourceCluster: null,
-      targetCluster: null,
-      sections:      [],
-      fetchError:    null,
-      loading:       false,
+      sourceId:       '',
+      targetId:       '',
+      apiBase:        'http://localhost:8080',
+      kubeconfigPath: '',
+      sections:       [],
+      fetchError:     null,
+      loading:        false,
     };
   },
 
   computed: {
-    ...mapGetters({ t: 'i18n/t' }),
-
-    sourceName() {
-      return this.sourceCluster?.spec?.displayName || this.sourceId;
-    },
-
-    targetName() {
-      return this.targetCluster?.spec?.displayName || this.targetId;
-    },
-
     totalObjects() {
-      return this.sections.reduce((sum, s) => sum + s.items.length, 0);
+      return this.sections.reduce((sum, s) =>
+        sum + s.items.reduce((n, i) => n + 1 + (i.children ? i.children.length : 0), 0), 0);
     },
 
     notMigratedCount() {
       return this.sections.reduce((sum, s) =>
-        sum + s.items.filter(i => i.status === STATUS.NOT_MIGRATED).length, 0);
+        sum + s.items.reduce((n, i) => {
+          const childCount = (i.children || []).filter(c => !c.migrated).length;
+          return n + (!i.migrated ? 1 : 0) + childCount;
+        }, 0), 0);
     },
 
     diffCount() {
       return this.sections.reduce((sum, s) =>
-        sum + s.items.filter(i => i.status === STATUS.DIFF).length, 0);
+        sum + s.items.reduce((n, i) => {
+          const childCount = (i.children || []).filter(c => c.diff).length;
+          return n + (i.diff ? 1 : 0) + childCount;
+        }, 0), 0);
+    },
+
+    migratedCount() {
+      return this.totalObjects - this.notMigratedCount - this.diffCount;
+    },
+
+    hasUnmigratedObjects() {
+      return this.notMigratedCount > 0 || this.diffCount > 0;
     },
   },
 
@@ -94,125 +71,84 @@ export default {
       this.fetchError = null;
 
       try {
-        // Fetch all object types in parallel; the management store is shared so
-        // filtering by clusterName afterwards is both correct and cache-friendly.
-        const [
-          allProjects,
-          allPRTBs,
-          allCRTBs,
-          allRepos,
-        ] = await Promise.all([
-          this.$store.dispatch('management/findAll', { type: MGMT_PROJECT }),
-          this.$store.dispatch('management/findAll', { type: MGMT_PRTB }),
-          this.$store.dispatch('management/findAll', { type: MGMT_CRTB }),
-          this.$store.dispatch('management/findAll', { type: CATALOG_REPO }),
-        ]);
-
-        // Split by cluster
-        const sourceProjects = allProjects;
-        const targetProjects = allProjects;
-        const sourceCRTBs    = allCRTBs;
-        const targetCRTBs    = allCRTBs;
-        const sourceRepos    = allRepos;
-        const targetRepos    = allRepos;
-
-        // Filter by cluster
-        const srcProjects = sourceProjects
-          .filter(p => p.spec?.clusterName === this.sourceId && !SKIP_PROJECTS.includes(p.spec?.displayName));
-        const tgtProjects = targetProjects
-          .filter(p => p.spec?.clusterName === this.targetId && !SKIP_PROJECTS.includes(p.spec?.displayName));
-
-        const srcCRTBs = sourceCRTBs
-          .filter(c => c.clusterName === this.sourceId || c.metadata?.namespace === this.sourceId)
-          .filter(c => !SKIP_CRTB_NAMES.includes(c.name) && !SKIP_CRTB_PREFIXES.some(p => c.name?.startsWith(p)));
-        const tgtCRTBs = targetCRTBs
-          .filter(c => c.clusterName === this.targetId || c.metadata?.namespace === this.targetId)
-          .filter(c => !SKIP_CRTB_NAMES.includes(c.name) && !SKIP_CRTB_PREFIXES.some(p => c.name?.startsWith(p)));
-
-        const srcRepos = sourceRepos
-          .filter(r => !r.metadata?.name?.startsWith(SKIP_REPO_PREFIX));
-        const tgtRepos = targetRepos
-          .filter(r => !r.metadata?.name?.startsWith(SKIP_REPO_PREFIX));
-
-        // Build project sections with nested PRTBs
-        const projectItems = srcProjects.map((srcP) => {
-          const tgtP = tgtProjects.find(p => p.spec?.displayName === srcP.spec?.displayName);
-          const projectStatus = !tgtP ? STATUS.NOT_MIGRATED
-            : this.specDiffers(srcP.spec, tgtP.spec) ? STATUS.DIFF
-              : STATUS.MIGRATED;
-
-          // PRTBs for this project
-          const srcPRTBs = allPRTBs.filter(b => b.projectName === srcP.id || b.spec?.projectName === srcP.id);
-          const tgtPRTBs = tgtP ? allPRTBs.filter(b => b.projectName === tgtP.id || b.spec?.projectName === tgtP.id) : [];
-
-          const prtbItems = srcPRTBs
-            .filter(b => !['creator-project-owner', 'creator-project-member'].includes(b.name))
-            .map((srcB) => {
-              const tgtB = tgtPRTBs.find(b => b.name === srcB.name);
-              return {
-                name:   srcB.name,
-                label:  srcB.name,
-                type:   'prtb',
-                status: !tgtB ? STATUS.NOT_MIGRATED
-                  : this.specDiffers(srcB, tgtB) ? STATUS.DIFF
-                    : STATUS.MIGRATED,
-              };
-            });
-
-          return {
-            name:     srcP.spec?.displayName,
-            label:    srcP.spec?.displayName,
-            type:     'project',
-            status:   projectStatus,
-            children: prtbItems,
-          };
+        const res = await fetch(`${ this.apiBase }/api/status`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            kubeconfig: this.kubeconfigPath,
+            source:     this.sourceId,
+            target:     this.targetId,
+          }),
         });
-
-        // CRTB items
-        const crtbItems = srcCRTBs.map((srcC) => {
-          const tgtC = tgtCRTBs.find(c => c.name === srcC.name);
-          return {
-            name:   srcC.name,
-            label:  srcC.name,
-            type:   'crtb',
-            status: !tgtC ? STATUS.NOT_MIGRATED
-              : this.specDiffers(srcC, tgtC) ? STATUS.DIFF
-                : STATUS.MIGRATED,
-          };
-        });
-
-        // Catalog repo items
-        const repoItems = srcRepos.map((srcR) => {
-          const tgtR = tgtRepos.find(r => r.name === srcR.name || r.metadata?.name === srcR.metadata?.name);
-          return {
-            name:   srcR.metadata?.name || srcR.name,
-            label:  srcR.metadata?.name || srcR.name,
-            type:   'repo',
-            status: !tgtR ? STATUS.NOT_MIGRATED
-              : this.specDiffers(srcR.spec, tgtR.spec) ? STATUS.DIFF
-                : STATUS.MIGRATED,
-          };
-        });
-
-        this.sections = [
-          { title: 'Projects', icon: 'folder', items: projectItems },
-          { title: 'Cluster Role Bindings', icon: 'user', items: crtbItems },
-          { title: 'Catalog Repos', icon: 'catalog', items: repoItems },
-        ];
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || `HTTP ${ res.status }`);
+        }
+        this.sections = this.buildSections(data);
       } catch (err) {
-        this.fetchError = err?.message || String(err);
+        this.fetchError = err.message || String(err);
       } finally {
         this.loading = false;
       }
     },
 
-    specDiffers(a, b) {
-      // Simple deep equality check (Vue's JSON comparison)
-      return JSON.stringify(a) !== JSON.stringify(b);
+    buildSections(data) {
+      // Projects (with nested PRTBs and namespaces as children)
+      const projectItems = (data.projects || []).map(p => ({
+        name:     p.name,
+        label:    p.name,
+        type:     'project',
+        migrated: p.migrated,
+        diff:     p.diff,
+        children: [
+          ...(p.prtbs || []).map(b => ({
+            name:     b.name,
+            label:    b.description ? `${ b.name }: ${ b.description }` : b.name,
+            type:     'prtb',
+            migrated: b.migrated,
+            diff:     b.diff,
+          })),
+          ...(p.namespaces || []).map(ns => ({
+            name:     ns.name,
+            label:    ns.name,
+            type:     'namespace',
+            migrated: ns.migrated,
+            diff:     ns.diff,
+          })),
+        ],
+      }));
+
+      const crtbItems = (data.clusterRoleBindings || []).map(c => ({
+        name:     c.name,
+        label:    c.description ? `${ c.name }: ${ c.description }` : c.name,
+        type:     'crtb',
+        migrated: c.migrated,
+        diff:     c.diff,
+      }));
+
+      const repoItems = (data.catalogRepos || []).map(r => ({
+        name:     r.name,
+        label:    r.name,
+        type:     'repo',
+        migrated: r.migrated,
+        diff:     r.diff,
+      }));
+
+      return [
+        { title: 'Projects', icon: 'folder', items: projectItems },
+        { title: 'Cluster Role Bindings', icon: 'user', items: crtbItems },
+        { title: 'Catalog Repos', icon: 'catalog', items: repoItems },
+      ];
     },
 
-    statusLabel(status) {
-      switch (status) {
+    itemStatus(item) {
+      if (!item.migrated) return STATUS.NOT_MIGRATED;
+      if (item.diff)      return STATUS.DIFF;
+      return STATUS.MIGRATED;
+    },
+
+    statusLabel(item) {
+      switch (this.itemStatus(item)) {
       case STATUS.MIGRATED:     return 'Migrated';
       case STATUS.NOT_MIGRATED: return 'Not Migrated';
       case STATUS.DIFF:         return 'Drift Detected';
@@ -220,8 +156,8 @@ export default {
       }
     },
 
-    statusColor(status) {
-      switch (status) {
+    statusColor(item) {
+      switch (this.itemStatus(item)) {
       case STATUS.MIGRATED:     return 'success';
       case STATUS.NOT_MIGRATED: return 'error';
       case STATUS.DIFF:         return 'warning';
@@ -239,7 +175,12 @@ export default {
     goToMigrate() {
       this.$router.push({
         name:   `${ PRODUCT_NAME }-c-cluster-${ PAGES.MIGRATE }`,
-        query:  { source: this.sourceId, target: this.targetId },
+        query:  {
+          source:     this.sourceId,
+          target:     this.targetId,
+          apiBase:    this.apiBase,
+          kubeconfig: this.kubeconfigPath,
+        },
         params: { product: PRODUCT_NAME, cluster: '_' },
       });
     },
@@ -267,7 +208,7 @@ export default {
         </button>
         <button
           class="btn role-primary"
-          :disabled="notMigratedCount === 0 && diffCount === 0"
+          :disabled="!hasUnmigratedObjects"
           @click="goToMigrate"
         >
           <i class="icon icon-upload" /> Run Migration
@@ -279,23 +220,23 @@ export default {
     <div class="cluster-strip">
       <span class="cluster-strip__item">
         <i class="icon icon-server" />
-        <strong>Source:</strong> {{ sourceName }}
+        <strong>Source:</strong> {{ sourceId }}
       </span>
       <i class="icon icon-chevron-right cluster-strip__arrow" />
       <span class="cluster-strip__item">
         <i class="icon icon-server" />
-        <strong>Target:</strong> {{ targetName }}
+        <strong>Target:</strong> {{ targetId }}
       </span>
     </div>
 
     <!-- Summary badges -->
-    <div v-if="!loading && !fetchError" class="summary-row mt-20">
+    <div v-if="!loading && !fetchError && sections.length > 0" class="summary-row mt-20">
       <div class="summary-badge summary-badge--total">
         <span class="summary-badge__count">{{ totalObjects }}</span>
         <span class="summary-badge__label">Total Objects</span>
       </div>
       <div class="summary-badge summary-badge--success">
-        <span class="summary-badge__count">{{ totalObjects - notMigratedCount - diffCount }}</span>
+        <span class="summary-badge__count">{{ migratedCount }}</span>
         <span class="summary-badge__label">Migrated</span>
       </div>
       <div class="summary-badge summary-badge--error">
@@ -312,13 +253,14 @@ export default {
     <Loading v-if="loading" />
 
     <!-- Error -->
-    <Banner v-else-if="fetchError" color="error" :label="fetchError" />
+    <Banner v-else-if="fetchError" color="error" :label="fetchError" class="mt-20" />
 
     <!-- No query params -->
     <Banner
-      v-else-if="!sourceId || !targetId"
+      v-else-if="!sourceId || !targetId || !kubeconfigPath"
       color="warning"
-      label="No clusters selected. Please go back to the dashboard and select source and target clusters."
+      label="No clusters selected. Please go back to the dashboard and configure the connection settings."
+      class="mt-20"
     />
 
     <!-- Status tree -->
@@ -345,12 +287,12 @@ export default {
         >
           <div class="status-item__row">
             <span class="status-item__name">{{ item.label }}</span>
-            <span :class="`badge badge--${ statusColor(item.status) }`">
-              {{ statusLabel(item.status) }}
+            <span :class="`badge badge--${ statusColor(item) }`">
+              {{ statusLabel(item) }}
             </span>
           </div>
 
-          <!-- Nested children (PRTBs inside a project) -->
+          <!-- Nested children (PRTBs / namespaces inside a project) -->
           <div
             v-if="item.children && item.children.length > 0"
             class="status-item__children"
@@ -362,10 +304,11 @@ export default {
             >
               <div class="status-item__row">
                 <span class="status-item__name">
-                  <i class="icon icon-user mr-5" />{{ child.label }}
+                  <i :class="`icon icon-${ child.type === 'namespace' ? 'folder' : 'user' } mr-5`" />
+                  {{ child.label }}
                 </span>
-                <span :class="`badge badge--${ statusColor(child.status) }`">
-                  {{ statusLabel(child.status) }}
+                <span :class="`badge badge--${ statusColor(child) }`">
+                  {{ statusLabel(child) }}
                 </span>
               </div>
             </div>
