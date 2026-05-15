@@ -1,10 +1,10 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"rancherlabs/cattle-drive/pkg/client"
 	"rancherlabs/cattle-drive/pkg/cluster"
@@ -174,20 +174,11 @@ func handleMigrate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var buf bytes.Buffer
-	migrateClient := cl.target
-	migrateErr := sc.Migrate(ctx, migrateClient, tc, &buf)
+	logger := &sliceLogger{}
+	migrateErr := sc.Migrate(ctx, cl.target, tc, logger)
 
-	logEntries := parseLog(buf.String())
-	// If the migration ended with an error, append it as a final error log entry
-	// so the UI can display and count it alongside the progress lines.
-	if migrateErr != nil {
-		logEntries = append(logEntries, MigrateLogEntry{
-			Message: "Error: " + migrateErr.Error(),
-			Error:   true,
-		})
-	}
 	// Ensure the log field never marshals as null.
+	logEntries := logger.entries
 	if logEntries == nil {
 		logEntries = []MigrateLogEntry{}
 	}
@@ -380,34 +371,22 @@ func buildStatusResponse(sc, tc *cluster.Cluster) StatusResponse {
 	return resp
 }
 
-// parseLog converts the text output of Migrate() into structured log entries.
-func parseLog(output string) []MigrateLogEntry {
-	var entries []MigrateLogEntry
-	for _, line := range splitLines(output) {
-		if line == "" {
-			continue
-		}
-		entries = append(entries, MigrateLogEntry{
-			Message: line,
-			Error:   false,
-		})
-	}
-	return entries
+// sliceLogger implements cluster.MigrateLogger and collects typed MigrateLogEntry
+// values. It replaces the old approach of capturing text output to a bytes.Buffer
+// and then splitting it by newlines.
+type sliceLogger struct {
+	entries []MigrateLogEntry
 }
 
-func splitLines(s string) []string {
-	var lines []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			lines = append(lines, s[start:i])
-			start = i + 1
-		}
+func (l *sliceLogger) LogEvent(e cluster.MigrateEvent) {
+	entry := MigrateLogEntry{
+		Message: fmt.Sprintf("migrated %s [%s]", e.Kind, e.Name),
 	}
-	if start < len(s) {
-		lines = append(lines, s[start:])
+	if e.Err != nil {
+		entry.Message = fmt.Sprintf("error migrating %s [%s]: %v", e.Kind, e.Name, e.Err)
+		entry.Error = true
 	}
-	return lines
+	l.entries = append(l.entries, entry)
 }
 
 // clusterNotFoundError is returned when one or both clusters cannot be found.

@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,73 +13,61 @@ import (
 	"rancherlabs/cattle-drive/pkg/cluster"
 )
 
-// ── splitLines ───────────────────────────────────────────────────────────────
+// ── sliceLogger ───────────────────────────────────────────────────────────────
 
-func TestSplitLines_Empty(t *testing.T) {
-	got := splitLines("")
-	if len(got) != 0 {
-		t.Fatalf("expected empty slice, got %v", got)
+func TestSliceLogger_SuccessEvent(t *testing.T) {
+	l := &sliceLogger{}
+	l.LogEvent(cluster.MigrateEvent{Kind: "project", Name: "my-project"})
+
+	if len(l.entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(l.entries))
+	}
+	e := l.entries[0]
+	if e.Error {
+		t.Error("success event should not be flagged as error")
+	}
+	if !strings.Contains(e.Message, "my-project") {
+		t.Errorf("message %q should contain object name", e.Message)
 	}
 }
 
-func TestSplitLines_SingleLine(t *testing.T) {
-	got := splitLines("hello")
-	if len(got) != 1 || got[0] != "hello" {
-		t.Fatalf("unexpected result: %v", got)
+func TestSliceLogger_ErrorEvent(t *testing.T) {
+	l := &sliceLogger{}
+	l.LogEvent(cluster.MigrateEvent{
+		Kind: "crtb",
+		Name: "binding-1",
+		Err:  errors.New("forbidden"),
+	})
+
+	if len(l.entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(l.entries))
+	}
+	e := l.entries[0]
+	if !e.Error {
+		t.Error("error event should be flagged as error")
+	}
+	if !strings.Contains(e.Message, "forbidden") {
+		t.Errorf("message %q should contain the error text", e.Message)
+	}
+	if !strings.Contains(e.Message, "binding-1") {
+		t.Errorf("message %q should contain object name", e.Message)
 	}
 }
 
-func TestSplitLines_MultipleLines(t *testing.T) {
-	got := splitLines("a\nb\nc")
-	want := []string{"a", "b", "c"}
-	if len(got) != len(want) {
-		t.Fatalf("expected %v, got %v", want, got)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("line %d: want %q, got %q", i, want[i], got[i])
-		}
-	}
-}
+func TestSliceLogger_MultipleEvents(t *testing.T) {
+	l := &sliceLogger{}
+	l.LogEvent(cluster.MigrateEvent{Kind: "project", Name: "p1"})
+	l.LogEvent(cluster.MigrateEvent{Kind: "prtb", Name: "prtb-1"})
+	l.LogEvent(cluster.MigrateEvent{Kind: "project", Name: "p2", Err: errors.New("boom")})
 
-func TestSplitLines_TrailingNewline(t *testing.T) {
-	got := splitLines("a\nb\n")
-	// trailing newline produces an empty last segment, splitLines won't append
-	// it because start == len(s).
-	want := []string{"a", "b"}
-	if len(got) != len(want) {
-		t.Fatalf("expected %v, got %v", want, got)
+	if len(l.entries) != 3 {
+		t.Fatalf("expected 3 entries, got %d", len(l.entries))
 	}
-}
-
-// ── parseLog ─────────────────────────────────────────────────────────────────
-
-func TestParseLog_Empty(t *testing.T) {
-	entries := parseLog("")
-	if len(entries) != 0 {
-		t.Fatalf("expected no entries, got %v", entries)
+	if l.entries[0].Error || l.entries[1].Error {
+		t.Error("first two entries should not be errors")
 	}
-}
-
-func TestParseLog_SkipsBlankLines(t *testing.T) {
-	entries := parseLog("line1\n\nline3\n")
-	if len(entries) != 2 {
-		t.Fatalf("expected 2 entries, got %d: %v", len(entries), entries)
-	}
-	if entries[0].Message != "line1" {
-		t.Errorf("entry[0] = %q, want %q", entries[0].Message, "line1")
-	}
-	if entries[1].Message != "line3" {
-		t.Errorf("entry[1] = %q, want %q", entries[1].Message, "line3")
-	}
-}
-
-func TestParseLog_NoneAreErrors(t *testing.T) {
-	entries := parseLog("ok1\nok2")
-	for _, e := range entries {
-		if e.Error {
-			t.Errorf("unexpected error flag on entry %q", e.Message)
-		}
+	if !l.entries[2].Error {
+		t.Error("third entry should be an error")
 	}
 }
 
