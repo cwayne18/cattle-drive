@@ -51,3 +51,65 @@ The interactive subcommands allows you to navigate in a simple list menu through
 
 [![asciicast](https://asciinema.org/a/Bd6wc7pT0RM92sWqOctAanReL.svg)](https://asciinema.org/a/Bd6wc7pT0RM92sWqOctAanReL)
 
+---
+
+## Rancher UI Extension
+
+The `ui-extension/` directory contains a [Rancher Dashboard UI Extension](https://github.com/rancher/ui-plugin-examples)
+that surfaces the same functionality as the CLI tool directly inside the Rancher Manager web UI.
+
+### Pages
+
+| Page | Description |
+|------|-------------|
+| **Dashboard** | Cluster picker — select source and target clusters, then navigate to Status or Migrate |
+| **Migration Status** | Tree view of all migratable objects with per-object status badges (Migrated / Not Migrated / Drift Detected) and summary counters |
+| **Run Migration** | Executes the migration with a live scrolling log showing success/failure for every object |
+
+### Screenshots
+
+#### Dashboard — Cluster Picker
+
+![Dashboard](screenshots/01-dashboard.svg)
+
+#### Migration Status
+
+![Migration Status](screenshots/02-migration-status.svg)
+
+#### Run Migration — Live Progress
+
+![Run Migration](screenshots/03-migration-progress.svg)
+
+### Extension structure
+
+```
+ui-extension/
+├── index.ts                        # Extension entry point
+├── product.ts                      # Product/sidebar registration
+├── package.json                    # Extension metadata
+├── babel.config.js
+├── tsconfig.json
+├── vue.config.js
+├── routing/
+│   └── extension-routing.js        # Vue Router routes
+└── pages/
+    ├── DashboardPage.vue            # Cluster picker & feature overview
+    ├── StatusPage.vue               # Migration status tree view
+    └── MigratePage.vue             # Migration runner with live log
+```
+
+### Installing the extension
+
+1. In Rancher Manager, go to the **local** cluster → **Apps** → **Repositories**.
+2. Click **Create** and add this repository as a Git-based Helm repository.
+3. Open the **Extensions** page and install the **cattle-drive** extension.
+
+### Developing locally
+
+```sh
+# From the rancher/dashboard repo root, with this repo checked out alongside it:
+yarn install --frozen-lockfile
+API=https://<your-rancher-host> yarn dev
+# Open https://127.0.0.1:8005 — the extension hot-reloads on file changes.
+```
+
