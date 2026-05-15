@@ -6,8 +6,8 @@ export default {
 
   data() {
     return {
-      // cattle-drive API server base URL (configurable via settings)
-      apiBase:       'http://localhost:8080',
+      // Prefer Rancher auth-aware in-cluster proxy by default.
+      apiBase:       '/k8s/clusters/local/api/v1/namespaces/cattle-system/services/http:cattle-drive-api:8080/proxy',
       kubeconfigPath: '',
       allClusters:   [],
       sourceCluster: null,
@@ -28,7 +28,7 @@ export default {
     },
 
     canFetch() {
-      return this.apiBase && this.kubeconfigPath;
+      return this.apiBase;
     },
 
     canContinue() {
@@ -39,15 +39,30 @@ export default {
   },
 
   methods: {
+    authHeaders() {
+      const headers = { 'Content-Type': 'application/json' };
+      const rawToken = this.$store?.getters?.['auth/token'];
+      const token = typeof rawToken === 'string' ? rawToken : (rawToken?.token || rawToken?.value);
+      if (token) {
+        headers.Authorization = `Bearer ${ token }`;
+      }
+      return headers;
+    },
+
     async fetchClusters() {
       if (!this.canFetch) return;
       this.loadingClusters = true;
       this.loadError = null;
       try {
+        const body = {};
+        if (this.kubeconfigPath) {
+          body.kubeconfig = this.kubeconfigPath;
+        }
         const res = await fetch(`${ this.apiBase }/api/clusters`, {
           method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ kubeconfig: this.kubeconfigPath }),
+          credentials: 'same-origin',
+          headers: this.authHeaders(),
+          body:    JSON.stringify(body),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -102,8 +117,7 @@ export default {
         Cattle Drive
       </h1>
       <p class="subtitle">
-        Migrate Rancher objects — Projects, Namespaces, Role Bindings, and Catalog Repos —
-        from one downstream cluster to another.
+        Migrate Rancher objects between downstream clusters from inside Rancher Dashboard.
       </p>
     </div>
 
@@ -123,8 +137,8 @@ export default {
         <div class="connection-row__field">
           <LabeledInput
             v-model="kubeconfigPath"
-            label="Kubeconfig Path (server-side)"
-            placeholder="/path/to/kubeconfig.yaml"
+            label="Kubeconfig Path (optional server-side override)"
+            placeholder="/path/to/kubeconfig.yaml (optional)"
           />
         </div>
         <div class="connection-row__action">
@@ -139,6 +153,11 @@ export default {
         </div>
       </div>
       <Banner v-if="loadError" color="error" :label="loadError" class="mt-10" />
+      <Banner
+        color="info"
+        class="mt-10"
+        label="Default mode uses Rancher's authenticated proxy path. Leave kubeconfig empty when the API server uses --default-kubeconfig."
+      />
     </div>
 
     <!-- Cluster Picker -->

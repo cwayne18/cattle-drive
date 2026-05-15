@@ -15,7 +15,7 @@ export default {
     const q = this.$route.query;
     this.sourceId       = q.source     || '';
     this.targetId       = q.target     || '';
-    this.apiBase        = q.apiBase    || 'http://localhost:8080';
+    this.apiBase        = q.apiBase    || '/k8s/clusters/local/api/v1/namespaces/cattle-system/services/http:cattle-drive-api:8080/proxy';
     this.kubeconfigPath = q.kubeconfig || '';
   },
 
@@ -23,7 +23,7 @@ export default {
     return {
       sourceId:       '',
       targetId:       '',
-      apiBase:        'http://localhost:8080',
+      apiBase:        '/k8s/clusters/local/api/v1/namespaces/cattle-system/services/http:cattle-drive-api:8080/proxy',
       kubeconfigPath: '',
       migrationLog:   [],
       overallStatus:  STEP.IDLE,
@@ -54,6 +54,16 @@ export default {
   },
 
   methods: {
+    authHeaders() {
+      const headers = { 'Content-Type': 'application/json' };
+      const rawToken = this.$store?.getters?.['auth/token'];
+      const token = typeof rawToken === 'string' ? rawToken : (rawToken?.token || rawToken?.value);
+      if (token) {
+        headers.Authorization = `Bearer ${ token }`;
+      }
+      return headers;
+    },
+
     goToDashboard() {
       this.$router.push({
         name:   `${ PRODUCT_NAME }-c-cluster-${ PAGES.DASHBOARD }`,
@@ -80,14 +90,18 @@ export default {
       this.errorMsg      = null;
 
       try {
+        const body = {
+          source: this.sourceId,
+          target: this.targetId,
+        };
+        if (this.kubeconfigPath) {
+          body.kubeconfig = this.kubeconfigPath;
+        }
         const res = await fetch(`${ this.apiBase }/api/migrate`, {
           method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({
-            kubeconfig: this.kubeconfigPath,
-            source:     this.sourceId,
-            target:     this.targetId,
-          }),
+          credentials: 'same-origin',
+          headers: this.authHeaders(),
+          body:    JSON.stringify(body),
         });
 
         const data = await res.json();
@@ -151,10 +165,10 @@ export default {
 
     <!-- No clusters warning -->
     <Banner
-      v-if="!sourceId || !targetId || !kubeconfigPath"
+      v-if="!sourceId || !targetId"
       color="warning"
       class="mt-20"
-      label="No clusters selected. Please go back and configure the connection settings."
+      label="No clusters selected. Please go back and choose source/target clusters."
     />
 
     <template v-else>

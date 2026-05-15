@@ -34,6 +34,10 @@ func writeError(w http.ResponseWriter, code int, msg string) {
 // handleClusters lists all non-local downstream clusters visible through the
 // kubeconfig passed as a JSON body.
 func handleClusters(w http.ResponseWriter, r *http.Request) {
+	handleClustersWithDefault("", w, r)
+}
+
+func handleClustersWithDefault(defaultKubeconfig string, w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -45,13 +49,14 @@ func handleClusters(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
-	if req.Kubeconfig == "" {
+	kubeconfigPath, err := resolveKubeconfig(req.Kubeconfig, defaultKubeconfig)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, "kubeconfig is required")
 		return
 	}
 
 	ctx := context.Background()
-	restCfg, err := clientcmd.BuildConfigFromFlags("", req.Kubeconfig)
+	restCfg, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "failed to load kubeconfig: "+err.Error())
 		return
@@ -86,6 +91,10 @@ func handleClusters(w http.ResponseWriter, r *http.Request) {
 // handleStatus compares source and target cluster objects and returns their
 // migration status.
 func handleStatus(w http.ResponseWriter, r *http.Request) {
+	handleStatusWithDefault("", w, r)
+}
+
+func handleStatusWithDefault(defaultKubeconfig string, w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -97,13 +106,14 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
-	if req.Kubeconfig == "" || req.Source == "" || req.Target == "" {
+	kubeconfigPath, err := resolveKubeconfig(req.Kubeconfig, defaultKubeconfig)
+	if err != nil || req.Source == "" || req.Target == "" {
 		writeError(w, http.StatusBadRequest, "kubeconfig, source and target are required")
 		return
 	}
 
 	ctx := context.Background()
-	sc, tc, cl, err := buildClusters(ctx, req.Kubeconfig, req.TargetRancherConfig, req.Source, req.Target)
+	sc, tc, cl, err := buildClusters(ctx, kubeconfigPath, req.TargetRancherConfig, req.Source, req.Target)
 	if err != nil {
 		var notFound *clusterNotFoundError
 		if errors.As(err, &notFound) {
@@ -133,6 +143,10 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 
 // handleMigrate runs the full migration and returns a structured log.
 func handleMigrate(w http.ResponseWriter, r *http.Request) {
+	handleMigrateWithDefault("", w, r)
+}
+
+func handleMigrateWithDefault(defaultKubeconfig string, w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -144,13 +158,14 @@ func handleMigrate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
-	if req.Kubeconfig == "" || req.Source == "" || req.Target == "" {
+	kubeconfigPath, err := resolveKubeconfig(req.Kubeconfig, defaultKubeconfig)
+	if err != nil || req.Source == "" || req.Target == "" {
 		writeError(w, http.StatusBadRequest, "kubeconfig, source and target are required")
 		return
 	}
 
 	ctx := context.Background()
-	sc, tc, cl, err := buildClusters(ctx, req.Kubeconfig, req.TargetRancherConfig, req.Source, req.Target)
+	sc, tc, cl, err := buildClusters(ctx, kubeconfigPath, req.TargetRancherConfig, req.Source, req.Target)
 	if err != nil {
 		var notFound *clusterNotFoundError
 		if errors.As(err, &notFound) {
@@ -306,12 +321,22 @@ func buildClusters(ctx context.Context, kubeconfigPath, targetKubeconfigPath, so
 	return sc, tc, cl, nil
 }
 
+func resolveKubeconfig(reqKubeconfig, defaultKubeconfig string) (string, error) {
+	if reqKubeconfig != "" {
+		return reqKubeconfig, nil
+	}
+	if defaultKubeconfig != "" {
+		return defaultKubeconfig, nil
+	}
+	return "", errors.New("kubeconfig is required")
+}
+
 // buildStatusResponse converts a populated + compared source Cluster (sc) and its
 // target Cluster (tc) into a StatusResponse suitable for JSON serialisation.
 func buildStatusResponse(sc, tc *cluster.Cluster) StatusResponse {
 	resp := StatusResponse{
-		Source:       sc.Obj.Spec.DisplayName,
-		Target:       tc.Obj.Spec.DisplayName,
+		Source: sc.Obj.Spec.DisplayName,
+		Target: tc.Obj.Spec.DisplayName,
 		// Initialise slices so they marshal as [] rather than null.
 		Projects:     []ProjectStatus{},
 		CRTBs:        []ObjectStatus{},

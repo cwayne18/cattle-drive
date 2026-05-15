@@ -63,10 +63,11 @@ calling Rancher APIs directly.
 ### API Server
 
 Before using the UI extension you must start the cattle-drive HTTP API server on a host that can
-reach the Rancher local cluster:
+reach the Rancher local cluster. For real Rancher installs, configure a default kubeconfig on the
+server so UI requests do not need to send filesystem paths:
 
 ```sh
-cattle-drive serve --listen 0.0.0.0:8080
+cattle-drive serve --listen 0.0.0.0:8080 --default-kubeconfig /var/lib/cattle-drive/kubeconfig.yaml
 ```
 
 This starts a lightweight HTTP server exposing three endpoints:
@@ -78,33 +79,38 @@ This starts a lightweight HTTP server exposing three endpoints:
 | `POST` | `/api/migrate` | Run full migration, return structured log |
 | `GET`  | `/healthz` | Health check |
 
-All endpoints accept and return JSON. Every request body must include a server-side
-`kubeconfig` path that the **cattle-drive** process can read. Example:
+All endpoints accept and return JSON. A request may include a server-side `kubeconfig` path, but
+when `--default-kubeconfig` is configured the field can be omitted. Example:
 
 ```sh
 # List clusters
 curl -s -X POST http://localhost:8080/api/clusters \
   -H 'Content-Type: application/json' \
-  -d '{"kubeconfig":"/path/to/kubeconfig.yaml"}' | jq .
+  -d '{}' | jq .
 
 # Get migration status
 curl -s -X POST http://localhost:8080/api/status \
   -H 'Content-Type: application/json' \
-  -d '{"kubeconfig":"/path/to/kubeconfig.yaml","source":"hussein-rke1","target":"hgalal-rke2"}' | jq .
+  -d '{"source":"hussein-rke1","target":"hgalal-rke2"}' | jq .
 
 # Run migration
 curl -s -X POST http://localhost:8080/api/migrate \
   -H 'Content-Type: application/json' \
-  -d '{"kubeconfig":"/path/to/kubeconfig.yaml","source":"hussein-rke1","target":"hgalal-rke2"}' | jq .
+  -d '{"source":"hussein-rke1","target":"hgalal-rke2"}' | jq .
 ```
 
-Cross-origin requests from the Rancher Dashboard are permitted via CORS headers.
+Cross-origin requests from the Rancher Dashboard are permitted via CORS headers. In production,
+prefer running the API as an in-cluster service and calling it through Rancher's same-origin proxy:
+
+`/k8s/clusters/local/api/v1/namespaces/cattle-system/services/http:cattle-drive-api:8080/proxy`
+
+This lets browser requests use the existing Rancher authenticated session.
 
 ### Pages
 
 | Page | Description |
 |------|-------------|
-| **Dashboard** | Connection settings (API URL + kubeconfig path), cluster picker, then navigate to Status or Migrate |
+| **Dashboard** | Connection settings (Rancher proxy API path + optional kubeconfig override), cluster picker, then navigate to Status or Migrate |
 | **Migration Status** | Tree view of all migratable objects with per-object status badges (Migrated / Not Migrated / Drift Detected) and summary counters |
 | **Run Migration** | Calls `POST /api/migrate` and renders the structured log |
 
@@ -146,7 +152,8 @@ ui-extension/
 2. In Rancher Manager, go to the **local** cluster → **Apps** → **Repositories**.
 3. Click **Create** and add this repository as a Git-based Helm repository.
 4. Open the **Extensions** page and install the **cattle-drive** extension.
-5. In the extension **Dashboard**, set the API server URL and the server-side kubeconfig path.
+5. Expose the cattle-drive API server as a Service in the local cluster and use Rancher's proxy path.
+6. In the extension **Dashboard**, keep the default Rancher proxy URL and (optionally) set a kubeconfig override.
 
 ### Developing locally
 
@@ -159,4 +166,3 @@ yarn install --frozen-lockfile
 API=https://<your-rancher-host> yarn dev
 # Open https://127.0.0.1:8005 — the extension hot-reloads on file changes.
 ```
-

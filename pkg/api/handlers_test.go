@@ -440,6 +440,35 @@ func TestHandleMigrate_MissingFields(t *testing.T) {
 	}
 }
 
+func TestResolveKubeconfig(t *testing.T) {
+	t.Run("request value wins", func(t *testing.T) {
+		got, err := resolveKubeconfig("/req", "/default")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "/req" {
+			t.Fatalf("expected /req, got %q", got)
+		}
+	})
+
+	t.Run("falls back to default", func(t *testing.T) {
+		got, err := resolveKubeconfig("", "/default")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "/default" {
+			t.Fatalf("expected /default, got %q", got)
+		}
+	})
+
+	t.Run("errors when both empty", func(t *testing.T) {
+		_, err := resolveKubeconfig("", "")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+}
+
 // ── NewServer route smoke test ────────────────────────────────────────────────
 
 func TestNewServer_RoutesRegistered(t *testing.T) {
@@ -516,6 +545,26 @@ func TestNewServer_CORSOptionsNoAuth(t *testing.T) {
 	}
 	if w.Header().Get("Access-Control-Allow-Origin") != "*" {
 		t.Error("missing CORS origin header on OPTIONS response")
+	}
+}
+
+func TestNewServer_DefaultKubeconfigUsed(t *testing.T) {
+	srv := NewServer(ServerOptions{DefaultKubeconfig: "/nonexistent"})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/clusters", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	var resp ErrorResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("invalid JSON response: %v", err)
+	}
+	if !strings.Contains(resp.Error, "failed to load kubeconfig") {
+		t.Fatalf("expected kubeconfig load error, got %q", resp.Error)
 	}
 }
 

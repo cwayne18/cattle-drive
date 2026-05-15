@@ -11,6 +11,8 @@ type ServerOptions struct {
 	// APIToken, if non-empty, requires every non-OPTIONS request to carry
 	// "Authorization: Bearer <token>". The /healthz endpoint is exempt.
 	APIToken string
+	// DefaultKubeconfig is used when request bodies omit "kubeconfig".
+	DefaultKubeconfig string
 }
 
 // NewServer returns an http.Handler that mounts all cattle-drive API routes.
@@ -34,9 +36,15 @@ func NewServer(opts ServerOptions) http.Handler {
 		return corsMiddleware(h)
 	}
 
-	mux.HandleFunc("/api/clusters", wrap(handleClusters))
-	mux.HandleFunc("/api/status", wrap(handleStatus))
-	mux.HandleFunc("/api/migrate", wrap(handleMigrate))
+	mux.HandleFunc("/api/clusters", wrap(func(w http.ResponseWriter, r *http.Request) {
+		handleClustersWithDefault(opts.DefaultKubeconfig, w, r)
+	}))
+	mux.HandleFunc("/api/status", wrap(func(w http.ResponseWriter, r *http.Request) {
+		handleStatusWithDefault(opts.DefaultKubeconfig, w, r)
+	}))
+	mux.HandleFunc("/api/migrate", wrap(func(w http.ResponseWriter, r *http.Request) {
+		handleMigrateWithDefault(opts.DefaultKubeconfig, w, r)
+	}))
 
 	// Health-check: no auth required.
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {

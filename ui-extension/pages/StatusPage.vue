@@ -14,10 +14,10 @@ export default {
     const q = this.$route.query;
     this.sourceId      = q.source     || '';
     this.targetId      = q.target     || '';
-    this.apiBase       = q.apiBase    || 'http://localhost:8080';
+    this.apiBase       = q.apiBase    || '/k8s/clusters/local/api/v1/namespaces/cattle-system/services/http:cattle-drive-api:8080/proxy';
     this.kubeconfigPath = q.kubeconfig || '';
 
-    if (this.sourceId && this.targetId && this.kubeconfigPath) {
+    if (this.sourceId && this.targetId) {
       await this.loadStatus();
     }
   },
@@ -26,7 +26,7 @@ export default {
     return {
       sourceId:       '',
       targetId:       '',
-      apiBase:        'http://localhost:8080',
+      apiBase:        '/k8s/clusters/local/api/v1/namespaces/cattle-system/services/http:cattle-drive-api:8080/proxy',
       kubeconfigPath: '',
       sections:       [],
       fetchError:     null,
@@ -66,19 +66,33 @@ export default {
   },
 
   methods: {
+    authHeaders() {
+      const headers = { 'Content-Type': 'application/json' };
+      const rawToken = this.$store?.getters?.['auth/token'];
+      const token = typeof rawToken === 'string' ? rawToken : (rawToken?.token || rawToken?.value);
+      if (token) {
+        headers.Authorization = `Bearer ${ token }`;
+      }
+      return headers;
+    },
+
     async loadStatus() {
       this.loading = true;
       this.fetchError = null;
 
       try {
+        const body = {
+          source: this.sourceId,
+          target: this.targetId,
+        };
+        if (this.kubeconfigPath) {
+          body.kubeconfig = this.kubeconfigPath;
+        }
         const res = await fetch(`${ this.apiBase }/api/status`, {
           method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({
-            kubeconfig: this.kubeconfigPath,
-            source:     this.sourceId,
-            target:     this.targetId,
-          }),
+          credentials: 'same-origin',
+          headers: this.authHeaders(),
+          body:    JSON.stringify(body),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -267,9 +281,9 @@ export default {
 
     <!-- No query params -->
     <Banner
-      v-else-if="!sourceId || !targetId || !kubeconfigPath"
+      v-else-if="!sourceId || !targetId"
       color="warning"
-      label="No clusters selected. Please go back to the dashboard and configure the connection settings."
+      label="No clusters selected. Please go back to the dashboard and select source/target clusters."
       class="mt-20"
     />
 

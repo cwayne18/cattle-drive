@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	listenAddr string
-	apiToken   string
+	listenAddr        string
+	apiToken          string
+	defaultKubeconfig string
 )
 
 // NewCommand returns the "serve" CLI sub-command that starts the HTTP API server.
@@ -36,13 +37,22 @@ func NewCommand() *cli.Command {
 				EnvVars:     []string{"CATTLE_DRIVE_API_TOKEN"},
 				Destination: &apiToken,
 			},
+			&cli.StringFlag{
+				Name:        "default-kubeconfig",
+				Usage:       "Default kubeconfig path used when request bodies omit kubeconfig",
+				EnvVars:     []string{"CATTLE_DRIVE_DEFAULT_KUBECONFIG", "CATTLE_DRIVE_KUBECONFIG"},
+				Destination: &defaultKubeconfig,
+			},
 		},
 		Action: serve,
 	}
 }
 
 func serve(clx *cli.Context) error {
-	opts := api.ServerOptions{APIToken: apiToken}
+	opts := api.ServerOptions{
+		APIToken:          apiToken,
+		DefaultKubeconfig: defaultKubeconfig,
+	}
 	srv := &http.Server{
 		Addr:    listenAddr,
 		Handler: api.NewServer(opts),
@@ -53,6 +63,11 @@ func serve(clx *cli.Context) error {
 		fmt.Println("Authorization: Bearer token required for all API requests")
 	} else {
 		fmt.Println("Warning: no --api-token set; the API is open to anyone with network access")
+	}
+	if defaultKubeconfig != "" {
+		fmt.Printf("Default kubeconfig: %s\n", defaultKubeconfig)
+	} else {
+		fmt.Println("No default kubeconfig configured; clients must send kubeconfig in requests")
 	}
 	fmt.Println("Endpoints:")
 	fmt.Println("  POST /api/clusters  - list downstream clusters")
